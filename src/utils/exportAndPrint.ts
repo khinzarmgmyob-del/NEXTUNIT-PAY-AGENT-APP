@@ -1,4 +1,9 @@
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { ShopProfile, Transaction } from '../types';
 import { formatKs } from './formatters';
 
@@ -104,7 +109,7 @@ export function exportToCsvBlob({
 /**
  * Helper to download Blob safely across all browsers & WebViews
  */
-function downloadBlob(blob: Blob, filename: string) {
+export function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -118,11 +123,6 @@ function downloadBlob(blob: Blob, filename: string) {
   }, 300);
 }
 
-/**
- * Printable Report Helper
- * Generates an isolated, beautifully styled print window/iframe
- * containing Myanmar typography, high-contrast tables, summary metrics, and shop profile.
- */
 export interface PrintReportOptions {
   title: string;
   subtitle?: string;
@@ -134,7 +134,10 @@ export interface PrintReportOptions {
   columnAligns?: ('left' | 'center' | 'right')[];
 }
 
-export function printFormattedReport({
+/**
+ * Builds standard clean HTML markup for A4 Report sheets
+ */
+export function buildReportHtmlMarkup({
   title,
   subtitle,
   shopProfile,
@@ -143,7 +146,7 @@ export function printFormattedReport({
   tableRows,
   summaryRow,
   columnAligns = [],
-}: PrintReportOptions) {
+}: PrintReportOptions): string {
   const shopName = shopProfile?.shopName || 'Money Agent POS';
   const shopAddress = shopProfile?.address || '';
   const shopPhone = shopProfile?.phone || '';
@@ -157,14 +160,14 @@ export function printFormattedReport({
   const cardsHtml =
     summaryCards.length > 0
       ? `
-      <div class="summary-grid">
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px;">
         ${summaryCards
           .map(
             (c) => `
-          <div class="summary-card">
-            <div class="summary-label">${c.label}</div>
-            <div class="summary-val">${c.value}</div>
-            ${c.note ? `<div class="summary-note">${c.note}</div>` : ''}
+          <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; background: #f8fafc;">
+            <div style="font-size: 9px; font-weight: bold; color: #475569; text-transform: uppercase;">${c.label}</div>
+            <div style="font-size: 13px; font-weight: 900; color: #0f172a; margin-top: 2px;">${c.value}</div>
+            ${c.note ? `<div style="font-size: 9px; color: #64748b;">${c.note}</div>` : ''}
           </div>
         `
           )
@@ -176,7 +179,12 @@ export function printFormattedReport({
   const theadHtml = `
     <thead>
       <tr>
-        ${tableHeaders.map((h, i) => `<th style="text-align: ${alignStyles[i]}">${h}</th>`).join('')}
+        ${tableHeaders
+          .map(
+            (h, i) =>
+              `<th style="background-color: #f1f5f9; color: #0f172a; font-weight: bold; border: 1px solid #94a3b8; padding: 6px 8px; font-size: 10px; text-align: ${alignStyles[i]}; white-space: nowrap;">${h}</th>`
+          )
+          .join('')}
       </tr>
     </thead>
   `;
@@ -185,11 +193,11 @@ export function printFormattedReport({
     <tbody>
       ${
         tableRows.length === 0
-          ? `<tr><td colspan="${tableHeaders.length}" style="text-align:center; padding: 20px; color:#888;">ဒေတာ မရှိပါ</td></tr>`
+          ? `<tr><td colspan="${tableHeaders.length}" style="text-align:center; padding: 20px; color:#888; border: 1px solid #cbd5e1;">ဒေတာ မရှိပါ</td></tr>`
           : tableRows
               .map(
-                (row) => `
-            <tr>
+                (row, rowIdx) => `
+            <tr style="background-color: ${rowIdx % 2 === 1 ? '#f8fafc' : '#ffffff'};">
               ${row
                 .map((cell, colIdx) => {
                   const align = alignStyles[colIdx] || 'left';
@@ -200,8 +208,8 @@ export function printFormattedReport({
                     ? 'color: #047857; font-weight: bold;'
                     : isNegative
                     ? 'color: #b91c1c; font-weight: bold;'
-                    : '';
-                  return `<td style="text-align: ${align}; ${colorStyle}">${cellStr}</td>`;
+                    : 'color: #1e293b;';
+                  return `<td style="border: 1px solid #cbd5e1; padding: 5px 8px; font-size: 10px; text-align: ${align}; ${colorStyle}; white-space: nowrap;">${cellStr}</td>`;
                 })
                 .join('')}
             </tr>
@@ -212,11 +220,13 @@ export function printFormattedReport({
       ${
         summaryRow && summaryRow.length > 0
           ? `
-        <tr class="summary-row">
+        <tr style="background-color: #e2e8f0; border-top: 2px solid #0f172a; font-weight: bold;">
           ${summaryRow
             .map((cell, colIdx) => {
               const align = alignStyles[colIdx] || 'left';
-              return `<td style="text-align: ${align}; font-weight: bold;">${cell !== undefined && cell !== null ? cell : ''}</td>`;
+              return `<td style="border: 1px solid #94a3b8; padding: 6px 8px; font-size: 10px; text-align: ${align}; font-weight: bold; color: #0f172a;">${
+                cell !== undefined && cell !== null ? cell : ''
+              }</td>`;
             })
             .join('')}
         </tr>
@@ -226,173 +236,49 @@ export function printFormattedReport({
     </tbody>
   `;
 
-  const fullHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8" />
-      <title>${title}</title>
-      <style>
-        @page {
-          size: A4 portrait;
-          margin: 10mm 10mm 12mm 10mm;
-        }
-        * {
-          box-sizing: border-box;
-          margin: 0;
-          padding: 0;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-        body {
-          font-family: 'Plus Jakarta Sans', 'Pyidaungsu', 'Padauk', Arial, sans-serif;
-          color: #0f172a;
-          background: #fff;
-          padding: 12px;
-          font-size: 11px;
-          line-height: 1.4;
-        }
-        .header {
-          text-align: center;
-          margin-bottom: 12px;
-          padding-bottom: 10px;
-          border-bottom: 2px solid #0f172a;
-        }
-        .shop-title {
-          font-size: 18px;
-          font-weight: 900;
-          color: #0f172a;
-          letter-spacing: -0.5px;
-          text-transform: uppercase;
-        }
-        .shop-info {
-          font-size: 11px;
-          color: #475569;
-          margin-top: 2px;
-        }
-        .report-title {
-          font-size: 14px;
-          font-weight: bold;
-          color: #1e293b;
-          margin-top: 6px;
-        }
-        .report-meta {
-          font-size: 10px;
-          color: #64748b;
-          margin-top: 3px;
-        }
-        .summary-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 8px;
-          margin-bottom: 14px;
-        }
-        .summary-card {
-          border: 1px solid #cbd5e1;
-          border-radius: 6px;
-          padding: 8px 10px;
-          background: #f8fafc;
-        }
-        .summary-label {
-          font-size: 9px;
-          font-weight: bold;
-          color: #475569;
-          text-transform: uppercase;
-        }
-        .summary-val {
-          font-size: 13px;
-          font-weight: 900;
-          color: #0f172a;
-          margin-top: 2px;
-        }
-        .summary-note {
-          font-size: 9px;
-          color: #64748b;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 10px;
-          margin-top: 8px;
-        }
-        th {
-          background-color: #f1f5f9;
-          color: #0f172a;
-          font-weight: bold;
-          border: 1px solid #94a3b8;
-          padding: 6px 8px;
-          white-space: nowrap;
-        }
-        td {
-          border: 1px solid #cbd5e1;
-          padding: 5px 8px;
-          white-space: nowrap;
-        }
-        tr:nth-child(even) {
-          background-color: #f8fafc;
-        }
-        .summary-row {
-          background-color: #e2e8f0 !important;
-          border-top: 2px solid #0f172a;
-          font-weight: bold;
-        }
-        .footer {
-          margin-top: 20px;
-          padding-top: 8px;
-          border-top: 1px dashed #cbd5e1;
-          display: flex;
-          justify-content: space-between;
-          font-size: 9px;
-          color: #64748b;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <div class="shop-title">${shopName}</div>
-        ${shopAddress || shopPhone ? `<div class="shop-info">${[shopAddress, shopPhone].filter(Boolean).join(' • ')}</div>` : ''}
-        <div class="report-title">${title}</div>
-        <div class="report-meta">${subtitle || ''} | ထုတ်ယူချိန်: ${datePrinted}</div>
+  return `
+    <div style="font-family: 'Plus Jakarta Sans', 'Pyidaungsu', 'Padauk', Arial, sans-serif; color: #0f172a; background: #fff; padding: 16px; font-size: 11px; line-height: 1.4; width: 100%;">
+      <div style="text-align: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid #0f172a;">
+        <div style="font-size: 18px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase;">${shopName}</div>
+        ${shopAddress || shopPhone ? `<div style="font-size: 11px; color: #475569; margin-top: 2px;">${[shopAddress, shopPhone].filter(Boolean).join(' • ')}</div>` : ''}
+        <div style="font-size: 14px; font-weight: bold; color: #1e293b; margin-top: 6px;">${title}</div>
+        <div style="font-size: 10px; color: #64748b; margin-top: 3px;">${subtitle || ''} | ထုတ်ယူချိန်: ${datePrinted}</div>
       </div>
 
       ${cardsHtml}
 
-      <table>
+      <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
         ${theadHtml}
         ${tbodyHtml}
       </table>
 
-      <div class="footer">
+      <div style="margin-top: 20px; padding-top: 8px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; font-size: 9px; color: #64748b;">
         <div>စာရင်းပေါင်း: ${tableRows.length} ခု</div>
         <div>System: Money Agent POS</div>
       </div>
-    </body>
-    </html>
+    </div>
   `;
-
-  executePrintHtml(fullHtml);
 }
 
 /**
- * Print Transaction Receipt Directly
+ * Builds standard clean HTML markup for Voucher / Receipt
  */
-export function printReceiptDocument(transactionOrHtml: Transaction | string, shopProfile?: ShopProfile) {
-  let innerHtml = '';
-
+export function buildReceiptHtmlMarkup(transactionOrHtml: Transaction | string, shopProfile?: ShopProfile): string {
   if (typeof transactionOrHtml === 'string') {
-    innerHtml = transactionOrHtml;
-  } else {
-    const tx = transactionOrHtml;
-    const sName = shopProfile?.shopName || 'MONEY AGENT POS';
-    const sPhone = shopProfile?.phone || '';
-    const sAddr = shopProfile?.address || '';
-    const isTransfer = tx.type === 'လွှဲပြောင်း';
-    const isCashOut = tx.type === 'ထုတ်';
-    const isDeduct = tx.commissionMode === 'deduct';
-    const netPayout = isCashOut ? (isDeduct ? Math.max(0, tx.amount - tx.commission) : tx.amount) : tx.amount;
-    const typeLabel = isTransfer ? '🔄 လွှဲပြောင်း' : isCashOut ? '📤 ငွေထုတ် (Cash Out)' : '📥 ငွေသွင်း (Cash In)';
+    return transactionOrHtml;
+  }
+  const tx = transactionOrHtml;
+  const sName = shopProfile?.shopName || 'MONEY AGENT POS';
+  const sPhone = shopProfile?.phone || '';
+  const sAddr = shopProfile?.address || '';
+  const isTransfer = tx.type === 'လွှဲပြောင်း';
+  const isCashOut = tx.type === 'ထုတ်';
+  const isDeduct = tx.commissionMode === 'deduct';
+  const netPayout = isCashOut ? (isDeduct ? Math.max(0, tx.amount - tx.commission) : tx.amount) : tx.amount;
+  const typeLabel = isTransfer ? '🔄 လွှဲပြောင်း' : isCashOut ? '📤 ငွေထုတ် (Cash Out)' : '📥 ငွေသွင်း (Cash In)';
 
-    innerHtml = `
+  return `
+    <div style="font-family: 'Plus Jakarta Sans', 'Pyidaungsu', 'Padauk', Arial, monospace; color: #000; background: #fff; padding: 12px; font-size: 11px; line-height: 1.4; width: 340px; margin: 0 auto; border: 1px dashed #666; border-radius: 4px;">
       <div style="text-align:center; padding-bottom:8px; border-bottom:1px dashed #666; margin-bottom:8px;">
         <div style="font-size:14px; font-weight:bold; text-transform:uppercase;">${sName}</div>
         ${sAddr ? `<div style="font-size:10px; color:#555;">${sAddr}</div>` : ''}
@@ -488,9 +374,224 @@ export function printReceiptDocument(transactionOrHtml: Transaction | string, sh
       <div style="text-align:center; font-size:9px; color:#777; margin-top:8px; padding-top:6px; border-top:1px dashed #666;">
         ကျေးဇူးတင်ပါသည်။ အဆင်ပြေစွာ အသုံးပြုနိုင်ပါစေ။
       </div>
-    `;
-  }
+    </div>
+  `;
+}
 
+/**
+ * Robust HTML to PDF Generator and Capacitor / Web Share
+ * 1. Renders HTML off-screen with high DPI canvas
+ * 2. Compiles to clean A4 / Receipt PDF using jsPDF
+ * 3. Saves to Capacitor Cache/Documents and triggers Native Share Sheet (Viber, Telegram, Files)
+ * 4. Fallbacks to Web Share / Direct Download on Browser
+ */
+export async function exportAndSharePdf({
+  htmlContent,
+  filename,
+  title,
+  isThermal = false,
+}: {
+  htmlContent: string;
+  filename: string;
+  title: string;
+  isThermal?: boolean;
+}): Promise<{ success: boolean; error?: string }> {
+  // Create off-screen rendering container
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.style.width = isThermal ? '380px' : '794px'; // 794px ~ A4 width at 96 DPI
+  container.style.backgroundColor = '#ffffff';
+  container.style.zIndex = '-999';
+  container.innerHTML = htmlContent;
+  document.body.appendChild(container);
+
+  try {
+    // Wait for layout/fonts to be ready
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    const canvas = await html2canvas(container, {
+      scale: 2, // 2x crisp rendering for Myanmar Unicode
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+
+    let pdf: jsPDF;
+    if (isThermal) {
+      // Thermal 80mm format
+      const pdfWidth = 80;
+      const pdfHeight = Math.max(100, (canvas.height * pdfWidth) / canvas.width);
+      pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [pdfWidth, pdfHeight],
+      });
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+    } else {
+      // A4 portrait format
+      pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= pageHeight;
+      }
+    }
+
+    const safeFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+    const base64DataUri = pdf.output('datauristring');
+    const base64Clean = base64DataUri.replace(/^data:application\/pdf;filename=[^;]+;base64,/, '').replace(/^data:application\/pdf;base64,/, '');
+
+    // Check if running in Capacitor Native Environment (Android / iOS)
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const writeResult = await Filesystem.writeFile({
+          path: safeFilename,
+          data: base64Clean,
+          directory: Directory.Cache,
+        });
+
+        await Share.share({
+          title: title,
+          text: `${title} - Money Agent POS PDF Report`,
+          url: writeResult.uri,
+          dialogTitle: 'Share PDF via Viber, Telegram or Save to Files',
+        });
+        return { success: true };
+      } catch (nativeErr: any) {
+        console.warn('Native Capacitor Share failed, trying fallback:', nativeErr);
+      }
+    }
+
+    // Web / Browser environment handling
+    const pdfBlob = pdf.output('blob');
+
+    // Try Web Share API with File (Supported on Mobile Chrome, Safari, Edge)
+    if (navigator.canShare && typeof File !== 'undefined') {
+      try {
+        const file = new File([pdfBlob], safeFilename, { type: 'application/pdf' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: title,
+            text: `${title} - Money Agent POS PDF Report`,
+            files: [file],
+          });
+          return { success: true };
+        }
+      } catch (shareErr) {
+        console.warn('Web Share failed or cancelled, downloading directly:', shareErr);
+      }
+    }
+
+    // Direct Download Fallback
+    downloadBlob(pdfBlob, safeFilename);
+    return { success: true };
+  } catch (error: any) {
+    console.error('PDF Generation / Export error:', error);
+    return { success: false, error: error?.message || 'PDF ထုတ်ယူရာတွင် အမှားတစ်ခု ဖြစ်ပေါ်ခဲ့ပါသည်။' };
+  } finally {
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
+  }
+}
+
+/**
+ * Helper to Export Formatted Report as PDF & Native Share
+ */
+export async function exportReportToPdfAndShare(options: PrintReportOptions & { filename?: string }): Promise<boolean> {
+  const html = buildReportHtmlMarkup(options);
+  const safeFilename = options.filename || `${options.title.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+  const result = await exportAndSharePdf({
+    htmlContent: html,
+    filename: safeFilename,
+    title: options.title,
+    isThermal: false,
+  });
+  return result.success;
+}
+
+/**
+ * Helper to Export Receipt Voucher as PDF & Native Share
+ */
+export async function exportReceiptToPdfAndShare(
+  transactionOrHtml: Transaction | string,
+  shopProfile?: ShopProfile,
+  filename?: string
+): Promise<boolean> {
+  const html = buildReceiptHtmlMarkup(transactionOrHtml, shopProfile);
+  const txId = typeof transactionOrHtml === 'object' ? transactionOrHtml.id : 'Voucher';
+  const safeFilename = filename || `Receipt_Voucher_${txId}_${Date.now()}.pdf`;
+  const result = await exportAndSharePdf({
+    htmlContent: html,
+    filename: safeFilename,
+    title: `ပြေစာလက်မှတ် #${txId}`,
+    isThermal: true,
+  });
+  return result.success;
+}
+
+/**
+ * Printable Report Helper
+ * Generates an isolated, beautifully styled print window/iframe
+ */
+export function printFormattedReport(options: PrintReportOptions) {
+  const innerHtml = buildReportHtmlMarkup(options);
+  const fullHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>${options.title}</title>
+      <style>
+        @page {
+          size: A4 portrait;
+          margin: 10mm 10mm 12mm 10mm;
+        }
+        * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        body {
+          font-family: 'Plus Jakarta Sans', 'Pyidaungsu', 'Padauk', Arial, sans-serif;
+          color: #0f172a;
+          background: #fff;
+          padding: 12px;
+          font-size: 11px;
+          line-height: 1.4;
+        }
+      </style>
+    </head>
+    <body>
+      ${innerHtml}
+    </body>
+    </html>
+  `;
+  executePrintHtml(fullHtml);
+}
+
+/**
+ * Print Transaction Receipt Directly
+ */
+export function printReceiptDocument(transactionOrHtml: Transaction | string, shopProfile?: ShopProfile) {
+  const innerHtml = buildReceiptHtmlMarkup(transactionOrHtml, shopProfile);
   const fullHtml = `
     <!DOCTYPE html>
     <html>
@@ -519,21 +620,13 @@ export function printReceiptDocument(transactionOrHtml: Transaction | string, sh
           width: 76mm;
           margin: 0 auto;
         }
-        .receipt-container {
-          border: 1px dashed #666;
-          padding: 10px;
-          border-radius: 4px;
-        }
       </style>
     </head>
     <body>
-      <div class="receipt-container">
-        ${innerHtml}
-      </div>
+      ${innerHtml}
     </body>
     </html>
   `;
-
   executePrintHtml(fullHtml);
 }
 
@@ -559,7 +652,6 @@ function executePrintHtml(htmlContent: string) {
 
   const doc = iframe.contentWindow?.document || iframe.contentDocument;
   if (!doc) {
-    // Fallback
     window.print();
     return;
   }

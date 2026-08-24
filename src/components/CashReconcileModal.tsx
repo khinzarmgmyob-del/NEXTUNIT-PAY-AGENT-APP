@@ -15,10 +15,13 @@ import {
   ChevronUp,
   Eye,
   Trash2,
+  FileText,
+  Share2,
+  Loader2,
 } from 'lucide-react';
 import { Transaction, CashAccountItem, ShopProfile } from '../types';
 import { getTodayFormatted, formatKs } from '../utils/formatters';
-import { exportToExcelXlsx, exportToCsvBlob, printFormattedReport } from '../utils/exportAndPrint';
+import { exportToExcelXlsx, exportToCsvBlob, printFormattedReport, exportReportToPdfAndShare } from '../utils/exportAndPrint';
 
 interface CashReconcileModalProps {
   onClose: () => void;
@@ -252,6 +255,55 @@ export const CashReconcileModal: React.FC<CashReconcileModalProps> = ({
     });
   };
 
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
+  // Export PDF & Native Share
+  const handleExportPdf = async () => {
+    if (sortedTransactions.length === 0) {
+      alert('PDF ထုတ်ယူရန် ဒေတာ မရှိပါ။');
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      const rows = getReportRows();
+      const summaryRow = [
+        'စုစုပေါင်း',
+        '',
+        '',
+        '',
+        '',
+        '',
+        `${formatKs(totalCashIn)} Ks`,
+        `${formatKs(totalCashOut)} Ks`,
+        `${netCashAmount >= 0 ? '+' : ''}${formatKs(netCashAmount)} Ks`,
+        `+${formatKs(totalCommissionEarned)} Ks`,
+        '',
+        '',
+      ];
+
+      await exportReportToPdfAndShare({
+        title: 'လက်ငင်းငွေသား Reconcile စာရင်း (Cash Reconcile)',
+        subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
+        shopProfile,
+        summaryCards: [
+          { label: 'စုစုပေါင်း ငွေသားဝင် (+)', value: `+${formatKs(totalCashIn)} Ks`, note: 'Cash In' },
+          { label: 'စုစုပေါင်း ငွေသားထွက် (-)', value: `-${formatKs(totalCashOut)} Ks`, note: 'Cash Out' },
+          { label: 'အသားတင် ငွေသားကျန် (Net)', value: `${netCashAmount >= 0 ? '+' : ''}${formatKs(netCashAmount)} Ks`, note: 'Net Cash Balance' },
+          { label: 'စုစုပေါင်း ကော်မရှင်ရငွေ', value: `+${formatKs(totalCommissionEarned)} Ks`, note: `စာရင်း ${sortedTransactions.length} ခု` },
+        ],
+        tableHeaders: headersList,
+        tableRows: rows,
+        summaryRow,
+        filename: `CashReconcile_${selectedReportDate}_${Date.now()}.pdf`,
+      });
+    } catch (err) {
+      console.error('PDF export error:', err);
+      alert('PDF ထုတ်ယူရာတွင် အမှားတစ်ခု ဖြစ်ပေါ်ခဲ့ပါသည်။');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6"
@@ -306,6 +358,23 @@ export const CashReconcileModal: React.FC<CashReconcileModalProps> = ({
               </button>
             </div>
 
+            {/* Export PDF & Share */}
+            <button
+              onClick={handleExportPdf}
+              disabled={isExportingPdf}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+              title="PDF ဖိုင်အဖြစ် ပြောင်းပြီး ဖုန်းထဲသိမ်းဆည်း / Native Share (Viber, Telegram) လုပ်မည်"
+            >
+              {isExportingPdf ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <FileText className="w-3.5 h-3.5" />
+              )}
+              <span className="hidden sm:inline">Export PDF & Share</span>
+              <Share2 className="w-3 h-3 opacity-80 hidden md:inline" />
+            </button>
+
+            {/* Excel */}
             <button
               onClick={handleExportExcel}
               className="p-1.5 sm:px-2.5 sm:py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
@@ -314,14 +383,8 @@ export const CashReconcileModal: React.FC<CashReconcileModalProps> = ({
               <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span className="hidden sm:inline">Excel</span>
             </button>
-            <button
-              onClick={handleExportCSV}
-              className="p-1.5 sm:px-2.5 sm:py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-              title="CSV ဒေါင်းလုဒ်"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">CSV</span>
-            </button>
+
+            {/* Print */}
             <button
               onClick={handlePrint}
               className="p-1.5 sm:px-2.5 sm:py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"

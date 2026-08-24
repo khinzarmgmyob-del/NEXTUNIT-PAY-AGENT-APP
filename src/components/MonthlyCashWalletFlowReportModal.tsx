@@ -11,10 +11,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  FileText,
+  Share2,
+  Loader2,
 } from 'lucide-react';
 import { Transaction, WalletItem, CashAccountItem, ShopProfile } from '../types';
 import { formatKs, getTodayFormatted } from '../utils/formatters';
-import { exportToExcelXlsx, exportToCsvBlob, printFormattedReport } from '../utils/exportAndPrint';
+import { exportToExcelXlsx, exportToCsvBlob, printFormattedReport, exportReportToPdfAndShare } from '../utils/exportAndPrint';
 
 interface MonthlyCashWalletFlowReportModalProps {
   onClose: () => void;
@@ -369,6 +372,53 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
     });
   };
 
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
+  // Export to PDF & Native Share
+  const handleExportPdf = async () => {
+    if (dailyRows.length === 0) {
+      alert('PDF ထုတ်ယူရန် ဒေတာ မရှိပါ။');
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      const { headers, rows, summaryRow } = getExportData();
+      const formattedSummaryRow = summaryRow.map((val, idx) => {
+        if (idx === 0) return 'စုစုပေါင်း';
+        const num = Number(val);
+        if (isNaN(num)) return String(val);
+        return `${num > 0 ? '+' : ''}${formatKs(num)} Ks`;
+      });
+
+      await exportReportToPdfAndShare({
+        title: 'SUMMARY OF MONTHLY CASH & WALLET FLOW STATEMENT',
+        subtitle: `လ: ${selectedMonth} | ဆိုင်အမည်: ${shopProfile?.shopName || 'Money Agent POS'}`,
+        shopProfile,
+        summaryCards: [
+          { label: 'လစဉ် စုစုပေါင်း ဝင်ငွေ (+)', value: `+${formatKs(grandTotals.totalIn)} Ks`, note: 'Cash & Wallet In' },
+          { label: 'လစဉ် စုစုပေါင်း ထွက်ငွေ (-)', value: `-${formatKs(grandTotals.totalOut)} Ks`, note: 'Cash & Wallet Out' },
+          { label: 'လစဉ် အသားတင် ငွေစီးဆင်းမှု', value: `${grandTotals.netFlow >= 0 ? '+' : ''}${formatKs(grandTotals.netFlow)} Ks`, note: 'Net Monthly Flow' },
+          { label: 'လှုပ်ရှားမှုရှိသော ရက်ပေါင်း', value: `${dailyRows.length} ရက်`, note: `${selectedMonth}` },
+        ],
+        tableHeaders: headers,
+        tableRows: rows.map((r) =>
+          r.map((cell, idx) => {
+            if (idx === 0) return String(cell);
+            const n = Number(cell);
+            return isNaN(n) ? String(cell) : n !== 0 ? formatKs(n) : '-';
+          })
+        ),
+        summaryRow: formattedSummaryRow,
+        filename: `MonthlyFlow_${selectedMonth}_${Date.now()}.pdf`,
+      });
+    } catch (err) {
+      console.error('PDF export error:', err);
+      alert('PDF ထုတ်ယူရာတွင် အမှားတစ်ခု ဖြစ်ပေါ်ခဲ့ပါသည်။');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div
       id="monthly-flow-report-modal"
@@ -392,6 +442,22 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Export PDF & Native Share */}
+            <button
+              onClick={handleExportPdf}
+              disabled={isExportingPdf}
+              className="flex items-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+              title="PDF ဖိုင်အဖြစ် ပြောင်းပြီး ဖုန်းထဲသိမ်းဆည်း / Native Share (Viber, Telegram) လုပ်မည်"
+            >
+              {isExportingPdf ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileText className="w-4 h-4" />
+              )}
+              <span>Export PDF & Share</span>
+              <Share2 className="w-3.5 h-3.5 opacity-80 hidden sm:inline" />
+            </button>
+
             {/* Export to Excel (.xlsx) Button */}
             <button
               onClick={handleExportExcel}
@@ -402,20 +468,10 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
               <span>Excel</span>
             </button>
 
-            {/* Export to CSV Button */}
-            <button
-              onClick={handleExportCSV}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-              title="CSV ဖိုင်အဖြစ် ဒေါင်းလုဒ်ရယူမည်"
-            >
-              <Download className="w-4 h-4" />
-              <span>CSV</span>
-            </button>
-
             {/* Print Button */}
             <button
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
               title="စာရွက် Print တန်းထုတ်မည်"
             >
               <Printer className="w-4 h-4" />
