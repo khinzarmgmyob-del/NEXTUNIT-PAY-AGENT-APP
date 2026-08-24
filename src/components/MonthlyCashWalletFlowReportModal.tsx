@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Transaction, WalletItem, CashAccountItem, ShopProfile } from '../types';
 import { formatKs, getTodayFormatted } from '../utils/formatters';
+import { exportToExcelXlsx, exportToCsvBlob, printFormattedReport } from '../utils/exportAndPrint';
 
 interface MonthlyCashWalletFlowReportModalProps {
   onClose: () => void;
@@ -271,88 +272,101 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
     };
   }, [cashAccounts, wallets, transactions, selectedMonth, showOnlyActiveDays]);
 
-  // Export to Excel (HTML table format compatible with all versions of Excel)
-  const handleExportExcel = () => {
-    let tableHtml = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
-        <style>
-          body { font-family: Arial, sans-serif; }
-          table { border-collapse: collapse; width: 100%; }
-          th, td { border: 1px solid #777777; padding: 6px 10px; text-align: right; }
-          th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
-          .title { font-size: 16pt; font-weight: bold; text-align: center; margin-bottom: 8px; }
-          .subtitle { font-size: 11pt; text-align: center; margin-bottom: 12px; }
-          .date-col { text-align: center; font-weight: bold; }
-          .total-row { background-color: #e6e6e6; font-weight: bold; }
-          .header-group { background-color: #d9e1f2; font-size: 11pt; }
-          .net-positive { color: #047857; font-weight: bold; }
-          .net-negative { color: #b91c1c; font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <div class="title">SUMMARY OF MONTHLY CASH FLOW STATEMENT</div>
-        <div class="subtitle">Month: ${selectedMonth} | Shop: ${shopProfile?.shopName || 'Money Agent POS'}</div>
-        <table>
-          <thead>
-            <tr>
-              <th rowspan="2" class="header-group">Date</th>
-              ${cashNames.map((c) => `<th colspan="2" class="header-group">${c} (ငွေသား)</th>`).join('')}
-              ${walletNames.map((w) => `<th colspan="2" class="header-group">${w}</th>`).join('')}
-              <th colspan="3" class="header-group">စုစုပေါင်း</th>
-            </tr>
-            <tr>
-              ${cashNames.map(() => `<th>ဝင်</th><th>ထွက်</th>`).join('')}
-              ${walletNames.map(() => `<th>ဝင်</th><th>ထွက်</th>`).join('')}
-              <th>ဝင်</th>
-              <th>ထွက်</th>
-              <th>Net</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${dailyRows
-              .map(
-                (row) => `
-              <tr>
-                <td class="date-col">${row.displayDate}</td>
-                ${cashNames.map((c) => `<td>${row.cashFlows[c]?.in || 0}</td><td>${row.cashFlows[c]?.out || 0}</td>`).join('')}
-                ${walletNames.map((w) => `<td>${row.walletFlows[w]?.in || 0}</td><td>${row.walletFlows[w]?.out || 0}</td>`).join('')}
-                <td>${row.totalIn}</td>
-                <td>${row.totalOut}</td>
-                <td class="${row.netFlow >= 0 ? 'net-positive' : 'net-negative'}">${row.netFlow >= 0 ? '+' + row.netFlow : row.netFlow}</td>
-              </tr>
-            `
-              )
-              .join('')}
-            <tr class="total-row">
-              <td class="date-col">စုစုပေါင်း</td>
-              ${cashNames.map((c) => `<td>${grandTotals.cash[c]?.in || 0}</td><td>${grandTotals.cash[c]?.out || 0}</td>`).join('')}
-              ${walletNames.map((w) => `<td>${grandTotals.wallets[w]?.in || 0}</td><td>${grandTotals.wallets[w]?.out || 0}</td>`).join('')}
-              <td>${grandTotals.totalIn}</td>
-              <td>${grandTotals.totalOut}</td>
-              <td class="${grandTotals.netFlow >= 0 ? 'net-positive' : 'net-negative'}">${grandTotals.netFlow >= 0 ? '+' + grandTotals.netFlow : grandTotals.netFlow}</td>
-            </tr>
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `;
+  // Build tabular headers and rows for Excel and CSV
+  const getExportData = () => {
+    const flatHeaders: string[] = ['Date (ရက်စွဲ)'];
+    cashNames.forEach((c) => {
+      flatHeaders.push(`${c} [ဝင်]`, `${c} [ထွက်]`);
+    });
+    walletNames.forEach((w) => {
+      flatHeaders.push(`${w} [ဝင်]`, `${w} [ထွက်]`);
+    });
+    flatHeaders.push('စုစုပေါင်း ဝင်', 'စုစုပေါင်း ထွက်', 'Net Flow');
 
-    const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Monthly_Cash_Wallet_Flow_Statement_${selectedMonth}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const rows = dailyRows.map((row) => {
+      const rowVals: (string | number)[] = [row.displayDate];
+      cashNames.forEach((c) => {
+        rowVals.push(row.cashFlows[c]?.in || 0, row.cashFlows[c]?.out || 0);
+      });
+      walletNames.forEach((w) => {
+        rowVals.push(row.walletFlows[w]?.in || 0, row.walletFlows[w]?.out || 0);
+      });
+      rowVals.push(row.totalIn, row.totalOut, row.netFlow);
+      return rowVals;
+    });
+
+    const summaryRow: (string | number)[] = ['စုစုပေါင်း'];
+    cashNames.forEach((c) => {
+      summaryRow.push(grandTotals.cash[c]?.in || 0, grandTotals.cash[c]?.out || 0);
+    });
+    walletNames.forEach((w) => {
+      summaryRow.push(grandTotals.wallets[w]?.in || 0, grandTotals.wallets[w]?.out || 0);
+    });
+    summaryRow.push(grandTotals.totalIn, grandTotals.totalOut, grandTotals.netFlow);
+
+    return { headers: flatHeaders, rows, summaryRow };
   };
 
-  // Direct Print
+  // Export to Excel (.xlsx) using SheetJS
+  const handleExportExcel = () => {
+    if (dailyRows.length === 0) {
+      alert('ဒေါင်းလုဒ်ဆွဲရန် ဒေတာ မရှိပါ။');
+      return;
+    }
+    const { headers, rows, summaryRow } = getExportData();
+    exportToExcelXlsx({
+      filename: `Monthly_Cash_Wallet_Flow_Statement_${selectedMonth}.xlsx`,
+      sheetName: 'MonthlyFlow',
+      headers,
+      rows,
+      summaryRow,
+    });
+  };
+
+  // Export to CSV
+  const handleExportCSV = () => {
+    if (dailyRows.length === 0) {
+      alert('ဒေါင်းလုဒ်ဆွဲရန် ဒေတာ မရှိပါ။');
+      return;
+    }
+    const { headers, rows, summaryRow } = getExportData();
+    exportToCsvBlob({
+      filename: `Monthly_Cash_Wallet_Flow_Statement_${selectedMonth}.csv`,
+      headers,
+      rows: [...rows, summaryRow],
+    });
+  };
+
+  // Formatted Print
   const handlePrint = () => {
-    window.print();
+    const { headers, rows, summaryRow } = getExportData();
+    const formattedSummaryRow = summaryRow.map((val, idx) => {
+      if (idx === 0) return 'စုစုပေါင်း';
+      const num = Number(val);
+      if (isNaN(num)) return String(val);
+      return `${num > 0 ? '+' : ''}${formatKs(num)} Ks`;
+    });
+
+    printFormattedReport({
+      title: 'SUMMARY OF MONTHLY CASH & WALLET FLOW STATEMENT',
+      subtitle: `လ: ${selectedMonth} | ဆိုင်အမည်: ${shopProfile?.shopName || 'Money Agent POS'}`,
+      shopProfile,
+      summaryCards: [
+        { label: 'လစဉ် စုစုပေါင်း ဝင်ငွေ (+)', value: `+${formatKs(grandTotals.totalIn)} Ks`, note: 'Cash & Wallet In' },
+        { label: 'လစဉ် စုစုပေါင်း ထွက်ငွေ (-)', value: `-${formatKs(grandTotals.totalOut)} Ks`, note: 'Cash & Wallet Out' },
+        { label: 'လစဉ် အသားတင် ငွေစီးဆင်းမှု', value: `${grandTotals.netFlow >= 0 ? '+' : ''}${formatKs(grandTotals.netFlow)} Ks`, note: 'Net Monthly Flow' },
+        { label: 'လှုပ်ရှားမှုရှိသော ရက်ပေါင်း', value: `${dailyRows.length} ရက်`, note: `${selectedMonth}` },
+      ],
+      tableHeaders: headers,
+      tableRows: rows.map((r) =>
+        r.map((cell, idx) => {
+          if (idx === 0) return String(cell);
+          const n = Number(cell);
+          return isNaN(n) ? String(cell) : n !== 0 ? formatKs(n) : '-';
+        })
+      ),
+      summaryRow: formattedSummaryRow,
+    });
   };
 
   return (
@@ -378,20 +392,30 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Export to Excel Button */}
+            {/* Export to Excel (.xlsx) Button */}
             <button
               onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-              title="Excel (.xls) ဖိုင်အဖြစ် ဒေါင်းလုဒ်ရယူမည်"
+              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+              title="Excel (.xlsx) ဖိုင်အဖြစ် ဒေါင်းလုဒ်ရယူမည်"
             >
               <Download className="w-4 h-4" />
-              <span>Export to Excel</span>
+              <span>Excel</span>
+            </button>
+
+            {/* Export to CSV Button */}
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+              title="CSV ဖိုင်အဖြစ် ဒေါင်းလုဒ်ရယူမည်"
+            >
+              <Download className="w-4 h-4" />
+              <span>CSV</span>
             </button>
 
             {/* Print Button */}
             <button
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
               title="စာရွက် Print တန်းထုတ်မည်"
             >
               <Printer className="w-4 h-4" />

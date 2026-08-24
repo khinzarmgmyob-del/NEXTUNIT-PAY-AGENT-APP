@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Transaction, WalletItem, ShopProfile } from '../types';
 import { getTodayFormatted, formatKs } from '../utils/formatters';
+import { exportToExcelXlsx, exportToCsvBlob, printFormattedReport } from '../utils/exportAndPrint';
 
 interface WalletReconcileModalProps {
   onClose: () => void;
@@ -143,59 +144,116 @@ export const WalletReconcileModal: React.FC<WalletReconcileModalProps> = ({
 
   const netWalletAmount = totalWalletIn - totalWalletOut;
 
-  // Export CSV
-  const handleExportCSV = () => {
-    if (sortedTransactions.length === 0) {
-      alert('ဒေါင်းလုဒ်ဆွဲရန် ဒေတာ မရှိပါ။');
-      return;
-    }
+  const headersList = [
+    'စဉ်',
+    'နေ့စွဲ',
+    'အချိန်',
+    'ဖောက်သည်',
+    'ဖုန်းနံပါတ်',
+    'Wallet အကောက်',
+    'ငွေအမောက်/စီးဆင်းမှု',
+    'ဝင်/ထွက် ပုံစံ',
+    'ကော်မရှင်ရငွေ (Ks)',
+    'ငွေသားအကောက်',
+    'မှတ်ချက်',
+  ];
 
-    const headers = [
-      'စဉ်',
-      'နေ့စွဲ',
-      'အချိန်',
-      'ဖောက်သည်',
-      'ဖုန်းနံပါတ်',
-      'Wallet အကောက်',
-      'ငွေအမောက်/စီးဆင်းမှု',
-      'ဝင်/ထွက် ပုံစံ',
-      'ကော်မရှင်ရငွေ (Ks)',
-      'ငွေသားအကောက်',
-      'မှတ်ချက်',
-    ].join(',');
-
-    const rows = sortedTransactions.map((tx, idx) => {
+  const getReportRows = () => {
+    return sortedTransactions.map((tx, idx) => {
       const flow = getWalletFlow(tx, selectedWalletAccountFilter);
       const sign = flow.direction === 'in' ? '+' : flow.direction === 'out' ? '-' : '';
       const dirText = flow.direction === 'in' ? 'Wallet ဝင် (+)' : flow.direction === 'out' ? 'Wallet ထွက် (-)' : 'Wallet လွှဲပြောင်း';
 
       return [
         idx + 1,
-        `"${tx.date}"`,
-        `"${tx.time || '-'}"`,
-        `"${tx.customerName}"`,
-        `"${tx.phone}"`,
-        `"${tx.walletName || '-'}"`,
-        `"${sign}${flow.amount}"`,
-        `"${dirText}"`,
+        tx.date,
+        tx.time || '-',
+        tx.customerName,
+        tx.phone,
+        tx.walletName || '-',
+        `${sign}${flow.amount}`,
+        dirText,
         tx.commission || 0,
-        `"${tx.cashAccountName || '-'}"`,
-        `"${tx.note || '-'}"`,
-      ].join(',');
+        tx.cashAccountName || '-',
+        tx.note || '-',
+      ];
     });
+  };
 
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers, ...rows].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `wallet_reconcile_report_${selectedReportDate}_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  // Export Excel
+  const handleExportExcel = () => {
+    if (sortedTransactions.length === 0) {
+      alert('ဒေါင်းလုဒ်ဆွဲရန် ဒေတာ မရှိပါ။');
+      return;
+    }
+    const rows = getReportRows();
+    const summaryRow = [
+      'စုစုပေါင်း',
+      '',
+      '',
+      '',
+      '',
+      '',
+      netWalletAmount,
+      `ဝင်: ${totalWalletIn} | ထွက်: ${totalWalletOut}`,
+      totalCommissionEarned,
+      '',
+      `စာရင်း ${sortedTransactions.length} ခု`,
+    ];
+
+    exportToExcelXlsx({
+      filename: `Wallet_Reconcile_Report_${selectedReportDate}_${Date.now()}.xlsx`,
+      sheetName: 'WalletReconcile',
+      headers: headersList,
+      rows,
+      summaryRow,
+    });
+  };
+
+  // Export CSV
+  const handleExportCSV = () => {
+    if (sortedTransactions.length === 0) {
+      alert('ဒေါင်းလုဒ်ဆွဲရန် ဒေတာ မရှိပါ။');
+      return;
+    }
+    const rows = getReportRows();
+    exportToCsvBlob({
+      filename: `wallet_reconcile_report_${selectedReportDate}_${Date.now()}.csv`,
+      headers: headersList,
+      rows,
+    });
   };
 
   const handlePrint = () => {
-    window.print();
+    const rows = getReportRows();
+    const summaryRow = [
+      'စုစုပေါင်း',
+      '',
+      '',
+      '',
+      '',
+      '',
+      `${netWalletAmount >= 0 ? '+' : ''}${formatKs(netWalletAmount)} Ks`,
+      `ဝင်: ${formatKs(totalWalletIn)} | ထွက်: ${formatKs(totalWalletOut)}`,
+      `+${formatKs(totalCommissionEarned)} Ks`,
+      '',
+      '',
+    ];
+
+    printFormattedReport({
+      title: 'Wallet Reconcile စာရင်း (Wallet Reconcile)',
+      subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
+      shopProfile,
+      summaryCards: [
+        { label: 'စုစုပေါင်း Wallet ဝင် (+)', value: `+${formatKs(totalWalletIn)} Ks`, note: 'Wallet In' },
+        { label: 'စုစုပေါင်း Wallet ထွက် (-)', value: `-${formatKs(totalWalletOut)} Ks`, note: 'Wallet Out' },
+        { label: 'အသားတင် Wallet ကျန် (Net)', value: `${netWalletAmount >= 0 ? '+' : ''}${formatKs(netWalletAmount)} Ks`, note: 'Net Wallet Balance' },
+        { label: 'စုစုပေါင်း ကော်မရှင်ရငွေ', value: `+${formatKs(totalCommissionEarned)} Ks`, note: `စာရင်း ${sortedTransactions.length} ခု` },
+      ],
+      tableHeaders: headersList,
+      tableRows: rows,
+      summaryRow,
+    });
   };
 
   return (
@@ -252,6 +310,14 @@ export const WalletReconcileModal: React.FC<WalletReconcileModalProps> = ({
               </button>
             </div>
 
+            <button
+              onClick={handleExportExcel}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+              title="Excel (.xlsx) ဒေါင်းလုဒ်"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="hidden sm:inline">Excel</span>
+            </button>
             <button
               onClick={handleExportCSV}
               className="p-1.5 sm:px-2.5 sm:py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"

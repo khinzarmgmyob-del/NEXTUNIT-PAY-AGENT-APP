@@ -65,4 +65,60 @@
   overscroll-behavior-x: contain;
 }
 
+/* Comprehensive Print Optimization */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt;
+  }
+
+  /* Hide backdrop blur & background widgets */
+  .fixed.inset-0.bg-slate-900\/60,
+  .fixed.inset-0.bg-black\/50,
+  .fixed.inset-0.z-50 {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  /* Unclip max-height and overflow in modals */
+  .max-h-\[94vh\],
+  .max-h-\[92vh\],
+  .max-h-\[90vh\],
+  .overflow-y-auto,
+  .overflow-x-auto {
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Hide interactive controls, buttons, search, inputs during printing */
+  button,
+  input,
+  select,
+  .no-print,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Table styling */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    border: 1px solid #94a3b8 !important;
+    padding: 4px 6px !important;
+    color: #000000 !important;
+    background: transparent !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important;
+  }
+}
+
 

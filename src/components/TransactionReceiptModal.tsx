@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Printer, Copy, Check, FileCheck, Store, MapPin, Phone, Bluetooth, RefreshCw } from 'lucide-react';
 import { Transaction, ShopProfile } from '../types';
 import { formatKs } from '../utils/formatters';
+import { printReceiptDocument } from '../utils/exportAndPrint';
 import {
   printTransactionViaBluetooth,
   getBluetoothConnectionStatus,
@@ -77,7 +78,7 @@ ${transaction.cashAccountName ? `ငွေသားအကောင့်: ${tran
   };
 
   const handlePrint = () => {
-    window.print();
+    printReceiptDocument(transaction, shopProfile);
   };
 
   const handleBluetoothPrint = async () => {

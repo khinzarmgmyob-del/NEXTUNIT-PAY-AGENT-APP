@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Transaction, WalletItem, CashAccountItem, ShopProfile } from '../types';
 import { getTodayFormatted, formatKs, formatLakh } from '../utils/formatters';
+import { exportToExcelXlsx, exportToCsvBlob, printFormattedReport } from '../utils/exportAndPrint';
 
 interface TotalAccountsReportModalProps {
   onClose: () => void;
@@ -105,25 +106,24 @@ export const TotalAccountsReportModal: React.FC<TotalAccountsReportModalProps> =
     sortedTransactions.reduce((sum, tx) => sum + getWalletDeltaForTx(tx, w.name), 0)
   );
 
-  // Export CSV
-  const handleExportCSV = () => {
-    const cashHeaders = cashAccounts.map((c) => `"${c.name} (ငွေသား)"`);
-    const walletHeaders = wallets.map((w) => `"${w.name} (Wallet)"`);
+  const cashHeaders = cashAccounts.map((c) => `${c.name} (ငွေသား)`);
+  const walletHeaders = wallets.map((w) => `${w.name} (Wallet)`);
 
-    const headers = [
-      'စဉ်',
-      'နေ့စွဲ',
-      'အချိန်',
-      'ဖောက်သည်အမည်',
-      'အမျိုးအစား / ဖော်ပြချက်',
-      ...cashHeaders,
-      ...walletHeaders,
-      'ကော်မရှင်ခ (Ks)',
-      'ဖုန်းနံပါတ်',
-      'မှတ်ချက်',
-    ].join(',');
+  const headersList = [
+    'စဉ်',
+    'နေ့စွဲ',
+    'အချိန်',
+    'ဖောက်သည်အမည်',
+    'အမျိုးအစား / ဖော်ပြချက်',
+    ...cashHeaders,
+    ...walletHeaders,
+    'ကော်မရှင်ခ (Ks)',
+    'ဖုန်းနံပါတ်',
+    'မှတ်ချက်',
+  ];
 
-    const rows = sortedTransactions.map((tx, idx) => {
+  const getReportRows = () => {
+    return sortedTransactions.map((tx, idx) => {
       const isCashOut = tx.type === 'ထုတ်';
       const isTransfer = tx.type === 'လွှဲပြောင်း';
       const desc = isTransfer
@@ -144,30 +144,89 @@ export const TotalAccountsReportModal: React.FC<TotalAccountsReportModalProps> =
 
       return [
         idx + 1,
-        `"${tx.date}"`,
-        `"${tx.time || '-'}"`,
-        `"${tx.customerName}"`,
-        `"${desc}"`,
+        tx.date,
+        tx.time || '-',
+        tx.customerName,
+        desc,
         ...cashCols,
         ...walletCols,
         tx.commission || 0,
-        `"${tx.phone}"`,
-        `"${tx.note || '-'}"`,
-      ].join(',');
+        tx.phone,
+        tx.note || '-',
+      ];
     });
+  };
 
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers, ...rows].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `all_accounts_balance_ledger_${selectedReportDate}_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  const handleExportExcel = () => {
+    if (sortedTransactions.length === 0) {
+      alert('ဒေါင်းလုဒ်ဆွဲရန် ဒေတာ မရှိပါ။');
+      return;
+    }
+    const rows = getReportRows();
+    const summaryRow = [
+      'စုစုပေါင်း အပြောင်းအလဲ',
+      '',
+      '',
+      '',
+      '',
+      ...cashAccountTotals,
+      ...walletTotals,
+      totalCommission,
+      '',
+      `စာရင်း ${sortedTransactions.length} ခု`,
+    ];
+
+    exportToExcelXlsx({
+      filename: `Total_Accounts_Balance_Ledger_${selectedReportDate}_${Date.now()}.xlsx`,
+      sheetName: 'AllAccountsLedger',
+      headers: headersList,
+      rows,
+      summaryRow,
+    });
+  };
+
+  const handleExportCSV = () => {
+    if (sortedTransactions.length === 0) {
+      alert('ဒေါင်းလုဒ်ဆွဲရန် ဒေတာ မရှိပါ။');
+      return;
+    }
+    const rows = getReportRows();
+    exportToCsvBlob({
+      filename: `all_accounts_balance_ledger_${selectedReportDate}_${Date.now()}.csv`,
+      headers: headersList,
+      rows,
+    });
   };
 
   const handlePrint = () => {
-    window.print();
+    const rows = getReportRows();
+    const summaryRow = [
+      'စုစုပေါင်း အပြောင်းအလဲ',
+      '',
+      '',
+      '',
+      '',
+      ...cashAccountTotals.map((c) => `${c > 0 ? '+' : ''}${formatKs(c)} Ks`),
+      ...walletTotals.map((w) => `${w > 0 ? '+' : ''}${formatKs(w)} Ks`),
+      `+${formatKs(totalCommission)} Ks`,
+      '',
+      '',
+    ];
+
+    printFormattedReport({
+      title: 'စုစုပေါင်း ငွေစာရင်းအားလုံး လက်ကျန် အသေးစိတ် ရှင်းတမ်း',
+      subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
+      shopProfile,
+      summaryCards: [
+        { label: 'လက်ကျန် ငွေသားစုစုပေါင်း', value: `${formatKs(totalCashBalance)} Ks`, note: formatLakh(totalCashBalance) },
+        { label: 'လက်ကျန် Wallet စုစုပေါင်း', value: `${formatKs(totalWalletBalance)} Ks`, note: formatLakh(totalWalletBalance) },
+        { label: 'စုစုပေါင်း လုပ်ငန်းလက်ကျန်', value: `${formatKs(grandTotalBalance)} Ks`, note: formatLakh(grandTotalBalance) },
+        { label: 'စုစုပေါင်း ကော်မရှင်ရငွေ', value: `+${formatKs(totalCommission)} Ks`, note: `စာရင်း ${sortedTransactions.length} ခု` },
+      ],
+      tableHeaders: headersList,
+      tableRows: rows,
+      summaryRow,
+    });
   };
 
   return (
@@ -224,6 +283,14 @@ export const TotalAccountsReportModal: React.FC<TotalAccountsReportModalProps> =
               </button>
             </div>
 
+            <button
+              onClick={handleExportExcel}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+              title="Excel (.xlsx) ဒေါင်းလုဒ်"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="hidden sm:inline">Excel</span>
+            </button>
             <button
               onClick={handleExportCSV}
               className="p-1.5 sm:px-2.5 sm:py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"

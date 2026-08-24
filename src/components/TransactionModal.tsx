@@ -1049,8 +1049,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               ပယ်ဖျက်မည်
             </button>
             <button
-              type="button"
-              onClick={handleSubmitAction}
+              type="submit"
               disabled={isSubmitting}
               className={`flex-1 py-3 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                 isTransfer
