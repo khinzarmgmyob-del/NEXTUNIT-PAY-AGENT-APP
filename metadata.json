@@ -1,0 +1,6 @@
+{
+  "name": "Money Agent POS & Ledger",
+  "description": "ငွေလွှဲ / ငွေထုတ် စာရင်းကိုင်နှင့် လက်ကျန်ငွေ စီမံမှုစနစ် - Cash and Mobile Wallet Agent Management System",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
