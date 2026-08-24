@@ -1,20 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { X, Printer, Copy, Check, FileCheck, Store, MapPin, Phone } from 'lucide-react';
+import { X, Printer, Copy, Check, FileCheck, Store, MapPin, Phone, Bluetooth, RefreshCw } from 'lucide-react';
 import { Transaction, ShopProfile } from '../types';
 import { formatKs } from '../utils/formatters';
+import {
+  printTransactionViaBluetooth,
+  getBluetoothConnectionStatus,
+  connectBluetoothPrinter,
+} from '../utils/bluetoothPrinter';
 
 interface TransactionReceiptModalProps {
   transaction: Transaction;
   shopProfile?: ShopProfile;
   onClose: () => void;
+  onOpenBluetoothModal?: () => void;
 }
 
 export const TransactionReceiptModal: React.FC<TransactionReceiptModalProps> = ({
   transaction,
   shopProfile: propProfile,
   onClose,
+  onOpenBluetoothModal,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [isBtPrinting, setIsBtPrinting] = useState(false);
+  const [btStatus, setBtStatus] = useState(() => getBluetoothConnectionStatus());
+  const [btMessage, setBtMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setBtStatus(getBluetoothConnectionStatus());
+  }, []);
 
   // Get shop profile from prop or fallback to localStorage
   const shopProfile: ShopProfile = propProfile || (() => {
@@ -66,6 +80,38 @@ ${transaction.cashAccountName ? `ငွေသားအကောင့်: ${tran
     window.print();
   };
 
+  const handleBluetoothPrint = async () => {
+    setIsBtPrinting(true);
+    setBtMessage(null);
+
+    const paperWidth = (localStorage.getItem('app_bt_paper_width') || '58mm') as '58mm' | '80mm';
+
+    // If not connected yet, try auto-connecting
+    if (!btStatus.isConnected) {
+      if (onOpenBluetoothModal) {
+        setIsBtPrinting(false);
+        onOpenBluetoothModal();
+        return;
+      }
+      const connRes = await connectBluetoothPrinter();
+      if (!connRes.success) {
+        setBtMessage(connRes.message);
+        setIsBtPrinting(false);
+        return;
+      }
+      setBtStatus(getBluetoothConnectionStatus());
+    }
+
+    try {
+      const res = await printTransactionViaBluetooth(transaction, shopProfile, paperWidth);
+      setBtMessage(res.message);
+    } catch (err: any) {
+      setBtMessage(`Print Error: ${err.message}`);
+    } finally {
+      setIsBtPrinting(false);
+    }
+  };
+
   return (
     <div 
       className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 md:p-6"
@@ -94,7 +140,7 @@ ${transaction.cashAccountName ? `ငွေသားအကောင့်: ${tran
         </div>
 
         {/* Scrollable Receipt Body */}
-        <div className="flex-1 overflow-y-auto pr-1 space-y-4 -mr-1 mb-3">
+        <div className="flex-1 overflow-y-auto pr-1 space-y-3 -mr-1 mb-2">
           {/* Voucher Paper Box */}
           <div className="p-4 sm:p-5 bg-slate-50 border border-dashed border-slate-300 rounded-xl font-mono text-xs text-slate-800 space-y-3 select-all shadow-inner">
           {/* Shop Header (Centered) */}
@@ -213,10 +259,16 @@ ${transaction.cashAccountName ? `ငွေသားအကောင့်: ${tran
             ကျေးဇူးတင်ပါသည်။ အဆင်ပြေစွာ အသုံးပြုနိုင်ပါစေ။
           </div>
         </div>
+
+        {btMessage && (
+          <div className="p-2 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-900 font-medium text-center">
+            {btMessage}
+          </div>
+        )}
       </div>
 
         {/* Action buttons (Pinned at bottom) */}
-        <div className="flex gap-2 pt-2 border-t border-slate-100 shrink-0">
+        <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-slate-100 shrink-0">
           <button
             onClick={handleCopyText}
             className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
@@ -229,10 +281,29 @@ ${transaction.cashAccountName ? `ငွေသားအကောင့်: ${tran
             ) : (
               <>
                 <Copy className="w-4 h-4" />
-                ပြေစာစာသား Copy
+                ပြေစာ Copy
               </>
             )}
           </button>
+          
+          <button
+            onClick={handleBluetoothPrint}
+            disabled={isBtPrinting}
+            className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/20 cursor-pointer"
+          >
+            {isBtPrinting ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                BT Printing...
+              </>
+            ) : (
+              <>
+                <Bluetooth className="w-4 h-4" />
+                BT Printer
+              </>
+            )}
+          </button>
+
           <button
             onClick={handlePrint}
             className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer"

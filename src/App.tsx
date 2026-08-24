@@ -38,7 +38,7 @@ import {
   Wifi,
 } from 'lucide-react';
 import { Transaction, WalletItem, CashAccountItem, BackupData, TransactionType, ShopProfile, NetworkConfig, NetworkMode } from './types';
-import { getDeviceId, generateActivationKey, verifyActivationKey } from './utils/license';
+import { getDeviceId, generateActivationKey, verifyActivationKey, getAppLicenseStatus, LicenseStatus } from './utils/license';
 import { getTodayFormatted, getCurrentTimeFormatted, formatKs, formatLakh } from './utils/formatters';
 import { exportBackupData, readBackupFromFile } from './utils/backupManager';
 import { getAccountColorStyle, getPresetByColor } from './utils/colors';
@@ -57,6 +57,11 @@ import { WalletReconcileModal } from './components/WalletReconcileModal';
 import { MonthlyCashWalletFlowReportModal } from './components/MonthlyCashWalletFlowReportModal';
 import { PaginationControls } from './components/PaginationControls';
 import { NetworkSettingsModal } from './components/NetworkSettingsModal';
+import { LicenseDashboardModal } from './components/LicenseDashboardModal';
+import { CloudBackupModal } from './components/CloudBackupModal';
+import { BluetoothPrinterModal } from './components/BluetoothPrinterModal';
+import { triggerAutoCloudBackup, subscribeCloudBackup } from './services/cloudBackupService';
+import { getBluetoothConnectionStatus } from './utils/bluetoothPrinter';
 import {
   initDataService as initSQLiteDatabase,
   getTransactionsPaged,
@@ -180,6 +185,34 @@ export default function App() {
   const [showMonthlyFlowReport, setShowMonthlyFlowReport] = useState<boolean>(false);
   const [showArchiveModal, setShowArchiveModal] = useState<boolean>(false);
   const [showNetworkModal, setShowNetworkModal] = useState<boolean>(false);
+  const [showLicenseModal, setShowLicenseModal] = useState<boolean>(false);
+  const [showCloudBackupModal, setShowCloudBackupModal] = useState<boolean>(false);
+  const [showBluetoothModal, setShowBluetoothModal] = useState<boolean>(false);
+
+  // License & 3-Day Trial State
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatus>(() => getAppLicenseStatus());
+
+  // Cloud Auto-Backup state
+  const [cloudLastBackupTime, setCloudLastBackupTime] = useState<string>('');
+
+  // Bluetooth Printer connection status
+  const [btStatus, setBtStatus] = useState(() => getBluetoothConnectionStatus());
+
+  // Subscribe to Cloud Backup updates
+  useEffect(() => {
+    const unsub = subscribeCloudBackup((_snapshots, lastTime) => {
+      setCloudLastBackupTime(lastTime);
+    });
+    return unsub;
+  }, []);
+
+  // Update Bluetooth status periodically
+  useEffect(() => {
+    const updateBt = () => setBtStatus(getBluetoothConnectionStatus());
+    updateBt();
+    const interval = setInterval(updateBt, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Wi-Fi Network Mode (Master / Client) State
   const [networkConfig, setNetworkConfig] = useState<NetworkConfig>(() => getNetworkConfig());
@@ -257,17 +290,18 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // License Verification Effect
+  // License & 3-Day Trial Verification Effect
   useEffect(() => {
-    const id = getDeviceId();
-    setDeviceId(id);
+    const checkLicense = () => {
+      const status = getAppLicenseStatus();
+      setLicenseStatus(status);
+      setDeviceId(status.deviceId);
+      setIsActivated(status.canAccessApp);
+    };
 
-    const savedKey = localStorage.getItem('app_activation_key');
-    if (savedKey && verifyActivationKey(id, savedKey)) {
-      setIsActivated(true);
-    } else {
-      setIsActivated(false);
-    }
+    checkLicense();
+    const interval = setInterval(checkLicense, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   // Initialize SQLite Database and perform sync
@@ -495,6 +529,27 @@ export default function App() {
         saveWalletsToDB(updatedWalletsList),
         saveCashAccountsToDB(updatedCashList),
       ]);
+
+      // Trigger Cloud Auto-Backup asynchronously
+      triggerAutoCloudBackup({
+        cashAccounts: updatedCashList,
+        cashBalance: updatedCashList.reduce((sum, c) => sum + c.balance, 0),
+        wallets: updatedWalletsList,
+        transactions: [newTransaction, ...transactions],
+        shopProfile,
+        exportedAt: new Date().toISOString(),
+        version: '2.0.0',
+      });
+    } else {
+      triggerAutoCloudBackup({
+        cashAccounts,
+        cashBalance: totalCashBalance,
+        wallets,
+        transactions: [newTransaction, ...transactions],
+        shopProfile,
+        exportedAt: new Date().toISOString(),
+        version: '2.0.0',
+      });
     }
 
     setShowTransactionModal(false);
@@ -706,8 +761,61 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* Wi-Fi Master / Client Network Mode Button */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            {/* 1. License & 3-Day Free Trial Badge Button */}
+            <button
+              onClick={() => setShowLicenseModal(true)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                licenseStatus.isPermanent
+                  ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                  : 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-700 ring-1 ring-amber-300/50 animate-pulse'
+              }`}
+              title="လိုင်စင်နှင့် အစမ်းသုံးစွဲမှု အခြေအနေ (License Dashboard)"
+            >
+              {licenseStatus.isPermanent ? (
+                <>
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Full License</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>
+                    အစမ်း ၃ ရက် (
+                    {licenseStatus.remainingDays > 0
+                      ? `${licenseStatus.remainingDays}ရက်ကျန်`
+                      : `${licenseStatus.remainingHours || 0}နာရီကျန်`}
+                    )
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* 2. Cloud Auto-Backup & Sync Button */}
+            <button
+              onClick={() => setShowCloudBackupModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-sky-200 dark:border-sky-800"
+              title="Cloud Auto-Backup နှင့် ဒေတာသိမ်းဆည်းမှု စီမံရန်"
+            >
+              <Download className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 rotate-180" />
+              <span>Cloud Backup</span>
+            </button>
+
+            {/* 3. Bluetooth Thermal Printer Button */}
+            <button
+              onClick={() => setShowBluetoothModal(true)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                btStatus.isConnected
+                  ? 'bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800'
+                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200/60 dark:border-slate-700/60'
+              }`}
+              title="Bluetooth Thermal Receipt Printer ချိတ်ဆက်ရန်"
+            >
+              <Printer className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <span>{btStatus.isConnected ? 'BT Printer ချိတ်ပြီး' : 'BT Printer'}</span>
+            </button>
+
+            {/* 4. Wi-Fi Master / Client Network Mode Button */}
             <button
               onClick={() => setShowNetworkModal(true)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
@@ -737,11 +845,6 @@ export default function App() {
               <Store className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               <span>ဆိုင် Profile</span>
             </button>
-
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold">
-              <ShieldCheck className="w-4 h-4" />
-              <span>Activated</span>
-            </div>
 
             <button
               onClick={() => {
@@ -1761,6 +1864,7 @@ export default function App() {
           transaction={activeReceipt}
           shopProfile={shopProfile}
           onClose={() => setActiveReceipt(null)}
+          onOpenBluetoothModal={() => setShowBluetoothModal(true)}
         />
       )}
 
@@ -1826,7 +1930,7 @@ export default function App() {
         />
       )}
 
-      {/* 14. Wi-Fi Network Mode (Master / Client) Settings Modal */}
+      {/* 15. Wi-Fi Network Mode (Master / Client) Settings Modal */}
       {showNetworkModal && (
         <NetworkSettingsModal
           onClose={() => setShowNetworkModal(false)}
@@ -1860,6 +1964,64 @@ export default function App() {
               setIsDBLoading(false);
             }
           }}
+        />
+      )}
+
+      {/* 16. App License & 3-Day Free Trial Dashboard Modal */}
+      {showLicenseModal && (
+        <LicenseDashboardModal
+          onClose={() => setShowLicenseModal(false)}
+          licenseStatus={licenseStatus}
+          onActivated={() => {
+            const status = getAppLicenseStatus();
+            setLicenseStatus(status);
+            setIsActivated(status.canAccessApp);
+            showToast('လိုင်စင် အောင်မြင်စွာ ထည့်သွင်းပြီးပါပြီ။', 'success');
+          }}
+          onShowToast={showToast}
+        />
+      )}
+
+      {/* 17. Cloud Auto-Backup & Sync Management Modal */}
+      {showCloudBackupModal && (
+        <CloudBackupModal
+          onClose={() => setShowCloudBackupModal(false)}
+          currentBackupData={{
+            cashAccounts,
+            cashBalance: totalCashBalance,
+            wallets,
+            transactions,
+            shopProfile,
+            exportedAt: new Date().toISOString(),
+            version: '2.0.0',
+          }}
+          onRestoreSnapshot={async (snapshot) => {
+            try {
+              await restoreDatabasePayload(snapshot.data);
+              setCashAccounts(snapshot.data.cashAccounts || []);
+              setWallets(snapshot.data.wallets || []);
+              setTransactions(snapshot.data.transactions || []);
+              if (snapshot.data.shopProfile) setShopProfile(snapshot.data.shopProfile);
+              await fetchPagedTransactions(1, pageSize);
+              setCurrentPage(1);
+              showToast(`Cloud Backup Snapshot (${snapshot.timestamp}) အား အောင်မြင်စွာ Restore ပြန်လည်ရယူပြီးပါပြီ။`, 'success');
+            } catch (err: any) {
+              showToast('Cloud Snapshot Restore ပြုလုပ်ရာတွင် အမှားဖြစ်ပေါ်ခဲ့သည်: ' + (err?.message || ''), 'error');
+            }
+          }}
+          onShowToast={showToast}
+        />
+      )}
+
+      {/* 18. Bluetooth Thermal Receipt Printer Modal */}
+      {showBluetoothModal && (
+        <BluetoothPrinterModal
+          onClose={() => {
+            setShowBluetoothModal(false);
+            setBtStatus(getBluetoothConnectionStatus());
+          }}
+          shopProfile={shopProfile}
+          onShowToast={showToast}
         />
       )}
     </div>
