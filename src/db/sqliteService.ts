@@ -144,6 +144,31 @@ export async function initSQLiteDatabase(): Promise<boolean> {
 
       await dbConnection.execute(schemaSql);
 
+      // Migration: Ensure all columns exist for existing databases
+      const columnsToAdd = [
+        `ALTER TABLE transactions ADD COLUMN time TEXT`,
+        `ALTER TABLE transactions ADD COLUMN commissionMode TEXT DEFAULT 'separate'`,
+        `ALTER TABLE transactions ADD COLUMN commissionChannel TEXT DEFAULT 'Cash'`,
+        `ALTER TABLE transactions ADD COLUMN commissionWalletName TEXT`,
+        `ALTER TABLE transactions ADD COLUMN netPayout REAL`,
+        `ALTER TABLE transactions ADD COLUMN phone TEXT`,
+        `ALTER TABLE transactions ADD COLUMN targetWalletName TEXT`,
+        `ALTER TABLE transactions ADD COLUMN cashAccountName TEXT`,
+        `ALTER TABLE transactions ADD COLUMN accountType TEXT`,
+        `ALTER TABLE transactions ADD COLUMN note TEXT`,
+        `ALTER TABLE wallets ADD COLUMN accountNumber TEXT`,
+        `ALTER TABLE wallets ADD COLUMN color TEXT`,
+        `ALTER TABLE cash_accounts ADD COLUMN note TEXT`,
+        `ALTER TABLE cash_accounts ADD COLUMN color TEXT`,
+      ];
+      for (const colSql of columnsToAdd) {
+        try {
+          await dbConnection.execute(colSql);
+        } catch (e) {
+          // Column already exists or table updated, ignore
+        }
+      }
+
       // Check if migration from localStorage is needed
       await migrateLocalStorageIfEmpty();
 

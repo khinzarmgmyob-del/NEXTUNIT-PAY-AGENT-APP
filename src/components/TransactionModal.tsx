@@ -23,7 +23,7 @@ interface TransactionModalProps {
   wallets: WalletItem[];
   cashAccounts: CashAccountItem[];
   onClose: () => void;
-  onSave: (transaction: Omit<Transaction, 'id'>, updateBalances: boolean) => void;
+  onSave: (transaction: Omit<Transaction, 'id'>, updateBalances: boolean) => Promise<void> | void;
 }
 
 // Standard percentage rates 0.5% to 20%
@@ -73,6 +73,38 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [walletName, setWalletName] = useState<string>(defaultWallet);
   const [targetWalletName, setTargetWalletName] = useState<string>(defaultTargetWallet);
   const [cashAccountName, setCashAccountName] = useState<string>(defaultCash);
+
+  // Synchronize state when wallets or cashAccounts change or modal opens
+  useEffect(() => {
+    if (wallets && wallets.length > 0) {
+      if (!walletName || !wallets.some((w) => w.name === walletName)) {
+        setWalletName(wallets[0].name);
+      }
+      if (
+        !targetWalletName ||
+        !wallets.some((w) => w.name === targetWalletName) ||
+        (type === 'လွှဲပြောင်း' && targetWalletName === (walletName || wallets[0].name))
+      ) {
+        const other = wallets.find((w) => w.name !== (walletName || wallets[0].name));
+        if (other) {
+          setTargetWalletName(other.name);
+        } else if (wallets.length > 1) {
+          setTargetWalletName(wallets[1].name);
+        }
+      }
+      if (!commissionWalletName || !wallets.some((w) => w.name === commissionWalletName)) {
+        setCommissionWalletName(wallets[0].name);
+      }
+    }
+  }, [wallets, type, walletName]);
+
+  useEffect(() => {
+    if (cashAccounts && cashAccounts.length > 0) {
+      if (!cashAccountName || !cashAccounts.some((c) => c.name === cashAccountName)) {
+        setCashAccountName(cashAccounts[0].name);
+      }
+    }
+  }, [cashAccounts]);
 
   // Commission Channel & Target Wallet for Commission
   const [commissionChannel, setCommissionChannel] = useState<CommissionChannel>('Cash');
@@ -158,7 +190,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     setSelectedPercent(''); // Clear percent dropdown if user types fixed kyats
   };
 
-  const handleSubmitAction = () => {
+  const handleSubmitAction = async () => {
     setErrorMessage(null);
 
     // If amount is invalid
@@ -170,7 +202,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     // Auto-fill customer name if user didn't type one
     const finalCustomerName = customerName.trim() || 'အထွေထွေ ဖောက်သည် (General)';
 
-    if (isTransfer && walletName === targetWalletName) {
+    const effectiveWallet = walletName || (wallets[0]?.name || 'KPay');
+    const effectiveTargetWallet = isTransfer
+      ? (targetWalletName || (wallets.find((w) => w.name !== effectiveWallet)?.name || 'WaveMoney'))
+      : undefined;
+
+    if (isTransfer && effectiveWallet === effectiveTargetWallet) {
       setErrorMessage('လွှဲထုတ်မည့် Wallet နှင့် လက်ခံမည့် Wallet သည် မတူညီသော အကောင့်များ ဖြစ်ရပါမည်။');
       return;
     }
@@ -183,8 +220,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      const finalWalletName = walletName || (wallets[0]?.name || 'KPay');
-      const finalTargetWallet = isTransfer ? (targetWalletName || wallets[1]?.name || wallets[0]?.name || 'WaveMoney') : undefined;
       const finalCashAccount = cashAccountName || (cashAccounts[0]?.name || 'ဆိုင်ရှေ့ငွေပုံး (Counter Box)');
 
       const newTx: Omit<Transaction, 'id'> = {
@@ -196,20 +231,21 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         commission: numCommission,
         commissionMode: isCashOut ? commissionMode : undefined,
         commissionChannel: isTransfer ? commissionChannel : isCashIn ? 'Cash' : (commissionMode === 'deduct' ? 'Wallet' : 'Cash'),
-        commissionWalletName: isTransfer && commissionChannel === 'Wallet' ? (commissionWalletName || finalWalletName) : undefined,
+        commissionWalletName: isTransfer && commissionChannel === 'Wallet' ? (commissionWalletName || effectiveWallet) : undefined,
         netPayout: isCashOut ? netCashPayoutToCustomer : undefined,
         phone: phone.trim() || '-',
-        walletName: finalWalletName,
-        targetWalletName: finalTargetWallet,
+        walletName: effectiveWallet,
+        targetWalletName: effectiveTargetWallet,
         cashAccountName: finalCashAccount,
         accountType: 'Wallet',
-        note: note.trim() || (isTransfer ? `${finalWalletName} မှ ${finalTargetWallet} သို့ လွှဲပြောင်း` : undefined),
+        note: note.trim() || (isTransfer ? `${effectiveWallet} မှ ${effectiveTargetWallet} သို့ လွှဲပြောင်း` : undefined),
       };
 
-      onSave(newTx, autoUpdateBalances);
+      await onSave(newTx, autoUpdateBalances);
     } catch (err: any) {
       console.error('Error in onSave:', err);
       setErrorMessage('သိမ်းဆည်းရာတွင် အမှားတစ်ခု ဖြစ်ပေါ်ခဲ့ပါသည်။ ထပ်မံကြိုးစားကြည့်ပါ။');
+    } finally {
       setIsSubmitting(false);
     }
   };

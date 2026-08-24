@@ -445,117 +445,170 @@ export default function App() {
     txData: Omit<Transaction, 'id'>,
     updateBalances: boolean
   ) => {
-    const newTransaction: Transaction = {
-      ...txData,
-      id: Date.now(),
-    };
+    try {
+      const newTransaction: Transaction = {
+        ...txData,
+        id: Date.now(),
+      };
 
-    // 1. Insert into SQLite
-    await insertTransaction(newTransaction);
-    setTransactions((prev) => [newTransaction, ...prev]);
+      // 1. Update transactions state immediately
+      setTransactions((prev) => [newTransaction, ...prev]);
 
-    let updatedWalletsList = [...wallets];
-    let updatedCashList = [...cashAccounts];
+      let updatedWalletsList = [...wallets];
+      let updatedCashList = [...cashAccounts];
 
-    if (updateBalances) {
-      if (txData.type === 'လွှဲပြောင်း') {
-        const commChannel = txData.commissionChannel || 'Cash';
-        const commWallet = txData.commissionWalletName || txData.targetWalletName || txData.walletName;
-        const commAmount = txData.commission || 0;
+      if (updateBalances) {
+        if (txData.type === 'လွှဲပြောင်း') {
+          const commChannel = txData.commissionChannel || 'Cash';
+          const commWallet = txData.commissionWalletName || txData.targetWalletName || txData.walletName;
+          const commAmount = txData.commission || 0;
 
-        // 1. Dual Wallet Update for Transfer
-        updatedWalletsList = updatedWalletsList.map((w) => {
-          let newBal = w.balance;
-          let changed = false;
-
-          if (w.name === txData.walletName) {
-            newBal -= txData.amount;
-            changed = true;
+          // Ensure source and target wallets exist
+          if (!updatedWalletsList.some((w) => w.name === txData.walletName)) {
+            updatedWalletsList.push({
+              id: Date.now() + 1,
+              name: txData.walletName,
+              balance: 0,
+              updatedDate: txData.date,
+            });
           }
-          if (txData.targetWalletName && w.name === txData.targetWalletName) {
-            newBal += txData.amount;
-            changed = true;
-          }
-          if (commChannel === 'Wallet' && commAmount > 0 && w.name === commWallet) {
-            newBal += commAmount;
-            changed = true;
+          if (txData.targetWalletName && !updatedWalletsList.some((w) => w.name === txData.targetWalletName)) {
+            updatedWalletsList.push({
+              id: Date.now() + 2,
+              name: txData.targetWalletName,
+              balance: 0,
+              updatedDate: txData.date,
+            });
           }
 
-          if (changed) {
-            return { ...w, balance: newBal, updatedDate: txData.date };
-          }
-          return w;
-        });
+          // 1. Dual Wallet Update for Transfer
+          updatedWalletsList = updatedWalletsList.map((w) => {
+            let newBal = w.balance;
+            let changed = false;
 
-        // 2. Cash Account Update (if commission is received in Cash)
-        if (commChannel === 'Cash' && txData.cashAccountName && commAmount > 0) {
+            if (w.name === txData.walletName) {
+              newBal -= txData.amount;
+              changed = true;
+            }
+            if (txData.targetWalletName && w.name === txData.targetWalletName) {
+              newBal += txData.amount;
+              changed = true;
+            }
+            if (commChannel === 'Wallet' && commAmount > 0 && w.name === commWallet) {
+              newBal += commAmount;
+              changed = true;
+            }
+
+            if (changed) {
+              return { ...w, balance: newBal, updatedDate: txData.date };
+            }
+            return w;
+          });
+
+          // 2. Cash Account Update (if commission is received in Cash)
+          if (commChannel === 'Cash' && commAmount > 0) {
+            const cashTargetName = txData.cashAccountName || updatedCashList[0]?.name || 'ဆိုင်ရှေ့ငွေပုံး (Counter Box)';
+            if (!updatedCashList.some((c) => c.name === cashTargetName)) {
+              updatedCashList.push({
+                id: Date.now() + 3,
+                name: cashTargetName,
+                balance: 0,
+                updatedDate: txData.date,
+              });
+            }
+            updatedCashList = updatedCashList.map((c) => {
+              if (c.name === cashTargetName) {
+                return { ...c, balance: c.balance + commAmount, updatedDate: txData.date };
+              }
+              return c;
+            });
+          }
+        } else {
+          const isCashOut = txData.type === 'ထုတ်';
+          const walletTarget = txData.walletName || updatedWalletsList[0]?.name || 'KPay';
+          const cashTarget = txData.cashAccountName || updatedCashList[0]?.name || 'ဆိုင်ရှေ့ငွေပုံး (Counter Box)';
+
+          // Ensure wallet exists
+          if (!updatedWalletsList.some((w) => w.name === walletTarget)) {
+            updatedWalletsList.push({
+              id: Date.now() + 1,
+              name: walletTarget,
+              balance: 0,
+              updatedDate: txData.date,
+            });
+          }
+          // Ensure cash account exists
+          if (!updatedCashList.some((c) => c.name === cashTarget)) {
+            updatedCashList.push({
+              id: Date.now() + 2,
+              name: cashTarget,
+              balance: 0,
+              updatedDate: txData.date,
+            });
+          }
+
+          // 1. Update Selected Wallet
+          updatedWalletsList = updatedWalletsList.map((w) => {
+            if (w.name === walletTarget) {
+              const newBal = isCashOut
+                ? w.balance + txData.amount
+                : w.balance - txData.amount;
+              return { ...w, balance: newBal, updatedDate: txData.date };
+            }
+            return w;
+          });
+
+          // 2. Update Selected Cash Account
+          const cashDelta = isCashOut
+            ? -(txData.amount - (txData.commission || 0))
+            : txData.amount + (txData.commission || 0);
+
           updatedCashList = updatedCashList.map((c) => {
-            if (c.name === txData.cashAccountName) {
-              return { ...c, balance: c.balance + commAmount, updatedDate: txData.date };
+            if (c.name === cashTarget) {
+              return { ...c, balance: c.balance + cashDelta, updatedDate: txData.date };
             }
             return c;
           });
         }
-      } else {
-        const isCashOut = txData.type === 'ထုတ်';
 
-        // 1. Update Selected Wallet
-        updatedWalletsList = updatedWalletsList.map((w) => {
-          if (w.name === txData.walletName) {
-            const newBal = isCashOut
-              ? w.balance + txData.amount
-              : w.balance - txData.amount;
-            return { ...w, balance: newBal, updatedDate: txData.date };
-          }
-          return w;
-        });
-
-        // 2. Update Selected Cash Account
-        const cashDelta = isCashOut
-          ? -(txData.amount - (txData.commission || 0))
-          : txData.amount + (txData.commission || 0);
-
-        updatedCashList = updatedCashList.map((c) => {
-          if (c.name === txData.cashAccountName) {
-            return { ...c, balance: c.balance + cashDelta, updatedDate: txData.date };
-          }
-          return c;
-        });
+        setWallets(updatedWalletsList);
+        setCashAccounts(updatedCashList);
       }
 
-      setWallets(updatedWalletsList);
-      setCashAccounts(updatedCashList);
-      await Promise.all([
-        saveWalletsToDB(updatedWalletsList),
-        saveCashAccountsToDB(updatedCashList),
-      ]);
+      // Close modal and refresh paged view
+      setShowTransactionModal(false);
 
-      // Trigger Cloud Auto-Backup asynchronously
-      triggerAutoCloudBackup({
-        cashAccounts: updatedCashList,
-        cashBalance: updatedCashList.reduce((sum, c) => sum + c.balance, 0),
-        wallets: updatedWalletsList,
-        transactions: [newTransaction, ...transactions],
-        shopProfile,
-        exportedAt: new Date().toISOString(),
-        version: '2.0.0',
-      });
-    } else {
-      triggerAutoCloudBackup({
-        cashAccounts,
-        cashBalance: totalCashBalance,
-        wallets,
-        transactions: [newTransaction, ...transactions],
-        shopProfile,
-        exportedAt: new Date().toISOString(),
-        version: '2.0.0',
-      });
+      // Persist to SQLite / Local Storage
+      await insertTransaction(newTransaction);
+      if (updateBalances) {
+        await Promise.all([
+          saveWalletsToDB(updatedWalletsList),
+          saveCashAccountsToDB(updatedCashList),
+        ]);
+      }
+
+      // Trigger Cloud Auto-Backup asynchronously without blocking
+      try {
+        triggerAutoCloudBackup({
+          cashAccounts: updateBalances ? updatedCashList : cashAccounts,
+          cashBalance: (updateBalances ? updatedCashList : cashAccounts).reduce((sum, c) => sum + c.balance, 0),
+          wallets: updateBalances ? updatedWalletsList : wallets,
+          transactions: [newTransaction, ...transactions],
+          shopProfile,
+          exportedAt: new Date().toISOString(),
+          version: '2.0.0',
+        });
+      } catch (backupErr) {
+        console.warn('Auto cloud backup notice:', backupErr);
+      }
+
+      setCurrentPage(1);
+      fetchPagedTransactions(1, pageSize);
+      showToast('အရောင်းအဝယ် စာရင်းကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။', 'success');
+    } catch (err: any) {
+      console.error('Error in handleSaveTransaction:', err);
+      showToast(`စာရင်းသိမ်းဆည်းရာတွင် အမှားဖြစ်ပေါ်ခဲ့သည်: ${err?.message || 'အချက်အလက်များကို စစ်ဆေးပါ'}`, 'error');
     }
-
-    setShowTransactionModal(false);
-    setCurrentPage(1);
-    fetchPagedTransactions(1, pageSize);
-    showToast('အရောင်းအဝယ် စာရင်းကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။', 'success');
   };
 
   // Delete Transaction Handler
