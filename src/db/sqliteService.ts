@@ -186,6 +186,7 @@ export async function initSQLiteDatabase(): Promise<boolean> {
       console.error('Failed to initialize SQLite Database:', err);
       // Even if native SQLite fails on non-supported environments, we keep fallback
       isInitialized = false;
+      initPromise = null;
       return false;
     }
   })();

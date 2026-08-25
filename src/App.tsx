@@ -453,6 +453,8 @@ export default function App() {
 
       // 1. Update transactions state immediately
       setTransactions((prev) => [newTransaction, ...prev]);
+      setPagedTransactions((prev) => [newTransaction, ...prev.filter((t) => t.id !== newTransaction.id)]);
+      setTotalFilteredCount((prev) => prev + 1);
 
       let updatedWalletsList = [...wallets];
       let updatedCashList = [...cashAccounts];
@@ -613,8 +615,10 @@ export default function App() {
 
   // Delete Transaction Handler
   const handleDeleteTransaction = async (id: number) => {
-    await deleteTransactionById(id);
     setTransactions((prev) => prev.filter((t) => t.id !== id));
+    setPagedTransactions((prev) => prev.filter((t) => t.id !== id));
+    setTotalFilteredCount((prev) => Math.max(0, prev - 1));
+    await deleteTransactionById(id);
     fetchPagedTransactions(currentPage, pageSize);
     showToast('စာရင်းကို ဖျက်ပြီးပါပြီ။', 'info');
   };

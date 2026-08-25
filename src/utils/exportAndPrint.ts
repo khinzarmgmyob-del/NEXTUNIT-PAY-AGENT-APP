@@ -110,17 +110,24 @@ export function exportToCsvBlob({
  * Helper to download Blob safely across all browsers & WebViews
  */
 export function downloadBlob(blob: Blob, filename: string) {
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', filename);
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  setTimeout(() => {
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  }, 300);
+  try {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.setAttribute('download', filename);
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+      window.URL.revokeObjectURL(url);
+    }, 1000);
+  } catch (e) {
+    console.error('downloadBlob error:', e);
+  }
 }
 
 export interface PrintReportOptions {
@@ -396,14 +403,17 @@ export async function exportAndSharePdf({
   title: string;
   isThermal?: boolean;
 }): Promise<{ success: boolean; error?: string }> {
-  // Create off-screen rendering container
+  // Create off-screen rendering container with reliable positioning
   const container = document.createElement('div');
   container.style.position = 'fixed';
-  container.style.left = '-9999px';
+  container.style.left = '0';
   container.style.top = '0';
-  container.style.width = isThermal ? '380px' : '794px'; // 794px ~ A4 width at 96 DPI
+  container.style.width = isThermal ? '380px' : '820px';
+  container.style.minHeight = '100px';
   container.style.backgroundColor = '#ffffff';
-  container.style.zIndex = '-999';
+  container.style.zIndex = '-99999';
+  container.style.opacity = '0';
+  container.style.pointerEvents = 'none';
   container.innerHTML = htmlContent;
   document.body.appendChild(container);
 
@@ -416,6 +426,11 @@ export async function exportAndSharePdf({
       useCORS: true,
       backgroundColor: '#ffffff',
       logging: false,
+      windowWidth: isThermal ? 420 : 900,
+      scrollX: 0,
+      scrollY: 0,
+      x: 0,
+      y: 0,
     });
 
     const imgData = canvas.toDataURL('image/png');
@@ -424,7 +439,7 @@ export async function exportAndSharePdf({
     if (isThermal) {
       // Thermal 80mm format
       const pdfWidth = 80;
-      const pdfHeight = Math.max(100, (canvas.height * pdfWidth) / canvas.width);
+      const pdfHeight = Math.max(80, (canvas.height * pdfWidth) / canvas.width);
       pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -432,33 +447,35 @@ export async function exportAndSharePdf({
       });
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
     } else {
-      // A4 portrait format
+      // A4 portrait format with standard page margins
       pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = 210;
       const pageHeight = 297;
-      const imgWidth = pageWidth;
+      const margin = 6;
+      const imgWidth = pageWidth - margin * 2;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       let heightLeft = imgHeight;
-      let position = 0;
+      let position = margin;
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-      heightLeft -= pageHeight;
+      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= (pageHeight - margin * 2);
 
       while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
+        position = heightLeft - imgHeight + margin;
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-        heightLeft -= pageHeight;
+        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= (pageHeight - margin * 2);
       }
     }
 
     const safeFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
-    const base64DataUri = pdf.output('datauristring');
-    const base64Clean = base64DataUri.replace(/^data:application\/pdf;filename=[^;]+;base64,/, '').replace(/^data:application\/pdf;base64,/, '');
 
-    // Check if running in Capacitor Native Environment (Android / iOS)
+    // 1. Check if running in Capacitor Native Environment (Android / iOS)
     if (Capacitor.isNativePlatform()) {
       try {
+        const base64DataUri = pdf.output('datauristring');
+        const base64Clean = base64DataUri.replace(/^data:application\/pdf;filename=[^;]+;base64,/, '').replace(/^data:application\/pdf;base64,/, '');
+
         const writeResult = await Filesystem.writeFile({
           path: safeFilename,
           data: base64Clean,
@@ -473,32 +490,19 @@ export async function exportAndSharePdf({
         });
         return { success: true };
       } catch (nativeErr: any) {
-        console.warn('Native Capacitor Share failed, trying fallback:', nativeErr);
+        console.warn('Native Capacitor Share failed, falling back to direct save:', nativeErr);
       }
     }
 
-    // Web / Browser environment handling
-    const pdfBlob = pdf.output('blob');
-
-    // Try Web Share API with File (Supported on Mobile Chrome, Safari, Edge)
-    if (navigator.canShare && typeof File !== 'undefined') {
-      try {
-        const file = new File([pdfBlob], safeFilename, { type: 'application/pdf' });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            title: title,
-            text: `${title} - Money Agent POS PDF Report`,
-            files: [file],
-          });
-          return { success: true };
-        }
-      } catch (shareErr) {
-        console.warn('Web Share failed or cancelled, downloading directly:', shareErr);
-      }
+    // 2. Web / Browser environment: Use direct PDF save / blob download
+    try {
+      pdf.save(safeFilename);
+    } catch (saveErr) {
+      console.warn('pdf.save failed, using downloadBlob:', saveErr);
+      const pdfBlob = pdf.output('blob');
+      downloadBlob(pdfBlob, safeFilename);
     }
 
-    // Direct Download Fallback
-    downloadBlob(pdfBlob, safeFilename);
     return { success: true };
   } catch (error: any) {
     console.error('PDF Generation / Export error:', error);
