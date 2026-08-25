@@ -386,11 +386,11 @@ export function buildReceiptHtmlMarkup(transactionOrHtml: Transaction | string, 
 }
 
 /**
- * Robust HTML to PDF Generator and Capacitor / Web Share
- * 1. Renders HTML off-screen with high DPI canvas
+ * Robust HTML to PDF Generator and Direct Download / Capacitor Share
+ * 1. Renders HTML in high DPI canvas using offscreen positioned wrapper
  * 2. Compiles to clean A4 / Receipt PDF using jsPDF
- * 3. Saves to Capacitor Cache/Documents and triggers Native Share Sheet (Viber, Telegram, Files)
- * 4. Fallbacks to Web Share / Direct Download on Browser
+ * 3. Triggers immediate automatic file download as .pdf
+ * 4. Also shares via Native Sheet on Android/iOS Capacitor
  */
 export async function exportAndSharePdf({
   htmlContent,
@@ -403,34 +403,37 @@ export async function exportAndSharePdf({
   title: string;
   isThermal?: boolean;
 }): Promise<{ success: boolean; error?: string }> {
-  // Create off-screen rendering container with reliable positioning
+  // Create off-screen rendering wrapper that is fully painted but positioned off-viewport
+  const wrapper = document.createElement('div');
+  wrapper.style.position = 'fixed';
+  wrapper.style.left = '-9999px';
+  wrapper.style.top = '0px';
+  wrapper.style.width = isThermal ? '400px' : '860px';
+  wrapper.style.overflow = 'visible';
+  wrapper.style.zIndex = '-99999';
+  wrapper.style.backgroundColor = '#ffffff';
+
   const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.left = '0';
-  container.style.top = '0';
   container.style.width = isThermal ? '380px' : '820px';
-  container.style.minHeight = '100px';
   container.style.backgroundColor = '#ffffff';
-  container.style.zIndex = '-99999';
-  container.style.opacity = '0';
-  container.style.pointerEvents = 'none';
+  container.style.color = '#000000';
   container.innerHTML = htmlContent;
-  document.body.appendChild(container);
+  wrapper.appendChild(container);
+  document.body.appendChild(wrapper);
 
   try {
     // Wait for layout/fonts to be ready
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     const canvas = await html2canvas(container, {
       scale: 2, // 2x crisp rendering for Myanmar Unicode
       useCORS: true,
+      allowTaint: true,
       backgroundColor: '#ffffff',
       logging: false,
-      windowWidth: isThermal ? 420 : 900,
+      windowWidth: isThermal ? 450 : 920,
       scrollX: 0,
       scrollY: 0,
-      x: 0,
-      y: 0,
     });
 
     const imgData = canvas.toDataURL('image/png');
@@ -451,7 +454,7 @@ export async function exportAndSharePdf({
       pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = 210;
       const pageHeight = 297;
-      const margin = 6;
+      const margin = 8;
       const imgWidth = pageWidth - margin * 2;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       let heightLeft = imgHeight;
@@ -470,7 +473,18 @@ export async function exportAndSharePdf({
 
     const safeFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
 
-    // 1. Check if running in Capacitor Native Environment (Android / iOS)
+    // 1. Direct Browser PDF Download via Blob URL (most reliable in iframe & browsers)
+    const pdfBlob = pdf.output('blob');
+    downloadBlob(pdfBlob, safeFilename);
+
+    // 2. Also trigger jsPDF save method
+    try {
+      pdf.save(safeFilename);
+    } catch (saveErr) {
+      console.warn('pdf.save note:', saveErr);
+    }
+
+    // 3. If running in Capacitor Native Environment (Android / iOS), also trigger Native Share
     if (Capacitor.isNativePlatform()) {
       try {
         const base64DataUri = pdf.output('datauristring');
@@ -488,19 +502,9 @@ export async function exportAndSharePdf({
           url: writeResult.uri,
           dialogTitle: 'Share PDF via Viber, Telegram or Save to Files',
         });
-        return { success: true };
       } catch (nativeErr: any) {
-        console.warn('Native Capacitor Share failed, falling back to direct save:', nativeErr);
+        console.warn('Native Capacitor Share note:', nativeErr);
       }
-    }
-
-    // 2. Web / Browser environment: Use direct PDF save / blob download
-    try {
-      pdf.save(safeFilename);
-    } catch (saveErr) {
-      console.warn('pdf.save failed, using downloadBlob:', saveErr);
-      const pdfBlob = pdf.output('blob');
-      downloadBlob(pdfBlob, safeFilename);
     }
 
     return { success: true };
@@ -508,8 +512,8 @@ export async function exportAndSharePdf({
     console.error('PDF Generation / Export error:', error);
     return { success: false, error: error?.message || 'PDF ထုတ်ယူရာတွင် အမှားတစ်ခု ဖြစ်ပေါ်ခဲ့ပါသည်။' };
   } finally {
-    if (document.body.contains(container)) {
-      document.body.removeChild(container);
+    if (document.body.contains(wrapper)) {
+      document.body.removeChild(wrapper);
     }
   }
 }

@@ -162,6 +162,10 @@ export default function App() {
   const [totalPages, setTotalPages] = useState<number>(1);
 
   // Main Dashboard Aggregates from Database
+  const [mainTotalAmount, setMainTotalAmount] = useState<number>(0);
+  const [mainTotalIn, setMainTotalIn] = useState<number>(0);
+  const [mainTotalOut, setMainTotalOut] = useState<number>(0);
+  const [mainTotalTransfer, setMainTotalTransfer] = useState<number>(0);
   const [mainNetCash, setMainNetCash] = useState<number>(0);
   const [mainTotalCashComm, setMainTotalCashComm] = useState<number>(0);
   const [mainTotalWalletComm, setMainTotalWalletComm] = useState<number>(0);
@@ -360,6 +364,10 @@ export default function App() {
         setPagedTransactions(result.transactions);
         setTotalFilteredCount(result.totalCount);
         setTotalPages(result.totalPages);
+        setMainTotalAmount(result.totalAmount || 0);
+        setMainTotalIn(result.totalInAmount || 0);
+        setMainTotalOut(result.totalOutAmount || 0);
+        setMainTotalTransfer(result.totalTransferAmount || 0);
         setMainNetCash(result.netCash);
         setMainTotalCashComm(result.totalCashComm);
         setMainTotalWalletComm(result.totalWalletComm);
@@ -1442,19 +1450,43 @@ export default function App() {
               </div>
 
               {totalFilteredCount > 0 && (
-                <div className="p-3 bg-slate-900 dark:bg-slate-950 text-white rounded-xl shadow-md flex flex-wrap items-center justify-between gap-2 text-xs border border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-300">📊 စုစုပေါင်း ({totalFilteredCount} ခု) Total:</span>
-                    <span className={`font-black ${mainNetCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {mainNetCash >= 0 ? `+${formatKs(mainNetCash)}` : `-${formatKs(Math.abs(mainNetCash))}`}
-                    </span>
+                <div className="p-3.5 bg-slate-900 dark:bg-slate-950 text-white rounded-xl shadow-lg border border-slate-800 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-300">📊 စာရင်းမှတ်တမ်းပေါင်း:</span>
+                      <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-full font-bold text-xs">{totalFilteredCount} ခု</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">စုစုပေါင်း Amount ပေါင်း (Total Volume):</span>
+                      <span className="font-black text-indigo-300 text-sm">{formatKs(mainTotalAmount)} Ks</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-amber-300 font-bold">💵 ငွေသား: +{formatKs(mainTotalCashComm)}</span>
-                    <span className="text-purple-300 font-bold">📱 Wallet: +{formatKs(mainTotalWalletComm)}</span>
-                    <span className="text-emerald-300 font-black bg-white/10 px-2 py-0.5 rounded-lg border border-white/20">
-                      စုစုပေါင်း ကော်မရှင်: +{formatKs(mainGrandTotalComm)}
-                    </span>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+                    <div className="bg-white/5 p-2 rounded-lg border border-white/10">
+                      <span className="text-[10px] text-emerald-300 block">📥 စုစုပေါင်း ငွေသွင်း Amount:</span>
+                      <span className="font-black text-emerald-400">+{formatKs(mainTotalIn)} Ks</span>
+                    </div>
+                    <div className="bg-white/5 p-2 rounded-lg border border-white/10">
+                      <span className="text-[10px] text-rose-300 block">📤 စုစုပေါင်း ငွေထုတ် Amount:</span>
+                      <span className="font-black text-rose-400">-{formatKs(mainTotalOut)} Ks</span>
+                    </div>
+                    <div className="bg-white/5 p-2 rounded-lg border border-white/10">
+                      <span className="text-[10px] text-sky-300 block">🔄 စုစုပေါင်း လွှဲပြောင်း Amount:</span>
+                      <span className="font-black text-sky-400">{formatKs(mainTotalTransfer)} Ks</span>
+                    </div>
+                    <div className="bg-white/5 p-2 rounded-lg border border-white/10">
+                      <span className="text-[10px] text-amber-300 block">💵 ငွေသား ကော်မရှင်:</span>
+                      <span className="font-bold text-amber-300">+{formatKs(mainTotalCashComm)} Ks</span>
+                    </div>
+                    <div className="bg-white/5 p-2 rounded-lg border border-white/10">
+                      <span className="text-[10px] text-purple-300 block">📱 Wallet ကော်မရှင်:</span>
+                      <span className="font-bold text-purple-300">+{formatKs(mainTotalWalletComm)} Ks</span>
+                    </div>
+                    <div className="bg-indigo-950/90 p-2 rounded-lg border border-indigo-500/40">
+                      <span className="text-[10px] text-emerald-300 font-bold block">✨ စုစုပေါင်း ကော်မရှင်:</span>
+                      <span className="font-black text-emerald-300">+{formatKs(mainGrandTotalComm)} Ks</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1616,24 +1648,28 @@ export default function App() {
                 {totalFilteredCount > 0 && (
                   <tfoot className="bg-slate-100 dark:bg-slate-800 font-bold border-t-2 border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 sticky bottom-0 z-20 shadow-md">
                     <tr>
-                      <td colSpan={4} className="p-2.5 text-right font-bold text-slate-900 dark:text-slate-100">
-                        စုစုပေါင်း Total:
+                      <td colSpan={4} className="p-2.5 text-right font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                        📊 စုစုပေါင်း ({totalFilteredCount} ခု) Total:
                       </td>
-                      <td
-                        className={`p-2.5 text-right whitespace-nowrap ${
-                          mainNetCash >= 0 ? 'text-indigo-700 dark:text-indigo-400' : 'text-red-600 dark:text-red-400'
-                        }`}
-                      >
-                        {mainNetCash >= 0 ? `+${formatKs(mainNetCash)}` : `-${formatKs(Math.abs(mainNetCash))}`}
+                      <td className="p-2.5 text-right whitespace-nowrap">
+                        <div className="text-xs font-black text-slate-900 dark:text-slate-100">
+                          {formatKs(mainTotalAmount)} Ks
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
+                          (သွင်း: +{formatKs(mainTotalIn)} | ထုတ်: -{formatKs(mainTotalOut)} | လွှဲ: {formatKs(mainTotalTransfer)})
+                        </div>
+                        <div className={`text-[10px] font-bold ${mainNetCash >= 0 ? 'text-indigo-700 dark:text-indigo-400' : 'text-red-600 dark:text-red-400'}`}>
+                          ငွေသားစီးဆင်းမှု: {mainNetCash >= 0 ? `+${formatKs(mainNetCash)}` : `-${formatKs(Math.abs(mainNetCash))}`} Ks
+                        </div>
                       </td>
-                      <td className="p-2.5 text-right whitespace-nowrap text-amber-800 dark:text-amber-300 bg-amber-100/50 dark:bg-amber-950/30">
-                        +{formatKs(mainTotalCashComm)}
+                      <td className="p-2.5 text-right whitespace-nowrap text-amber-800 dark:text-amber-300 bg-amber-100/50 dark:bg-amber-950/30 font-black">
+                        +{formatKs(mainTotalCashComm)} Ks
                       </td>
-                      <td className="p-2.5 text-right whitespace-nowrap text-purple-800 dark:text-purple-300 bg-purple-100/50 dark:bg-purple-950/30">
-                        +{formatKs(mainTotalWalletComm)}
+                      <td className="p-2.5 text-right whitespace-nowrap text-purple-800 dark:text-purple-300 bg-purple-100/50 dark:bg-purple-950/30 font-black">
+                        +{formatKs(mainTotalWalletComm)} Ks
                       </td>
                       <td colSpan={4} className="p-2.5 whitespace-nowrap text-indigo-950 dark:text-indigo-200">
-                        👉 စုစုပေါင်း ကော်မရှင်: <b>+{formatKs(mainGrandTotalComm)}</b>
+                        👉 စုစုပေါင်း ကော်မရှင်: <b className="text-emerald-600 dark:text-emerald-400 text-xs">+{formatKs(mainGrandTotalComm)} Ks</b>
                       </td>
                     </tr>
                   </tfoot>

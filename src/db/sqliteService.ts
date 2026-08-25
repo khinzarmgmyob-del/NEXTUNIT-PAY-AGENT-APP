@@ -307,6 +307,9 @@ export interface PagedTransactionsResult {
   pageSize: number;
   // Filtered Aggregate Stats
   totalAmount: number;
+  totalInAmount: number;
+  totalOutAmount: number;
+  totalTransferAmount: number;
   totalCommission: number;
   netCash: number;
   totalCashComm: number;
@@ -430,6 +433,9 @@ export async function getTransactionsPaged(
     const statsSql = `
       SELECT 
         SUM(amount) as totalAmount,
+        SUM(CASE WHEN type = 'သွင်း' THEN amount ELSE 0 END) as totalInAmount,
+        SUM(CASE WHEN type = 'ထုတ်' THEN amount ELSE 0 END) as totalOutAmount,
+        SUM(CASE WHEN type = 'လွှဲပြောင်း' THEN amount ELSE 0 END) as totalTransferAmount,
         SUM(commission) as totalCommission,
         SUM(CASE 
           WHEN type = 'သွင်း' THEN amount 
@@ -457,6 +463,9 @@ export async function getTransactionsPaged(
       currentPage: page,
       pageSize,
       totalAmount: Number(stats.totalAmount || 0),
+      totalInAmount: Number(stats.totalInAmount || 0),
+      totalOutAmount: Number(stats.totalOutAmount || 0),
+      totalTransferAmount: Number(stats.totalTransferAmount || 0),
       totalCommission: Number(stats.totalCommission || 0),
       netCash: Number(stats.netCash || 0),
       totalCashComm: Number(stats.totalCashComm || 0),
@@ -519,6 +528,9 @@ function getTransactionsPagedFallback(options: QueryTransactionsOptions): PagedT
   const pagedList = filtered.slice(offset, offset + pageSize);
 
   let totalAmount = 0;
+  let totalInAmount = 0;
+  let totalOutAmount = 0;
+  let totalTransferAmount = 0;
   let totalCommission = 0;
   let netCash = 0;
   let totalCashComm = 0;
@@ -533,10 +545,14 @@ function getTransactionsPagedFallback(options: QueryTransactionsOptions): PagedT
     else totalWalletComm += comm;
 
     if (item.type === 'သွင်း') {
+      totalInAmount += item.amount;
       netCash += item.amount;
     } else if (item.type === 'ထုတ်') {
+      totalOutAmount += item.amount;
       const actual = item.netPayout !== undefined ? item.netPayout : item.commissionMode === 'deduct' ? item.amount - comm : item.amount;
       netCash -= actual;
+    } else if (item.type === 'လွှဲပြောင်း') {
+      totalTransferAmount += item.amount;
     }
   }
 
@@ -547,6 +563,9 @@ function getTransactionsPagedFallback(options: QueryTransactionsOptions): PagedT
     currentPage: page,
     pageSize,
     totalAmount,
+    totalInAmount,
+    totalOutAmount,
+    totalTransferAmount,
     totalCommission,
     netCash,
     totalCashComm,
