@@ -157,6 +157,8 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     .filter((t) => t.type === 'လွှဲပြောင်း')
     .reduce((sum, item) => sum + item.amount, 0);
 
+  const totalVolume = filteredData.reduce((sum, item) => sum + item.amount, 0);
+
   const netAmount = totalIn - totalOut;
 
   // Calculate Cash Commission vs Wallet Commission vs Total Commission
@@ -934,7 +936,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   <tfoot className="bg-slate-100 font-bold border-t-2 border-slate-300 text-slate-800 sticky bottom-0 z-20 shadow-md">
                     <tr>
                       <td colSpan={4} className="p-2.5 text-right font-bold text-slate-900">
-                        စုစုပေါင်း Total:
+                        စုစုပေါင်း Total ({filteredData.length} ခု):
                       </td>
                       <td
                         className={`p-2.5 text-right whitespace-nowrap ${
@@ -943,15 +945,17 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                       >
                         {netAmount >= 0 ? `+${formatKs(netAmount)}` : `-${formatKs(Math.abs(netAmount))}`}
                       </td>
-                      <td className="p-2.5 text-right whitespace-nowrap text-slate-600">-</td>
-                      <td className="p-2.5 text-right whitespace-nowrap text-amber-800 bg-amber-100/50">
+                      <td className="p-2.5 text-right whitespace-nowrap text-slate-900 font-black">
+                        {formatKs(totalVolume)} Ks
+                      </td>
+                      <td className="p-2.5 text-right whitespace-nowrap text-amber-800 bg-amber-100/50 font-black">
                         +{formatKs(totalCashComm)}
                       </td>
-                      <td className="p-2.5 text-right whitespace-nowrap text-purple-800 bg-purple-100/50">
+                      <td className="p-2.5 text-right whitespace-nowrap text-purple-800 bg-purple-100/50 font-black">
                         +{formatKs(totalWalletComm)}
                       </td>
                       <td colSpan={3} className="p-2.5 whitespace-nowrap text-indigo-900">
-                        👉 စုစုပေါင်း ကော်မရှင်: <b>+{formatKs(grandTotalComm)}</b>
+                        👉 စုစုပေါင်း ကော်မရှင်: <b className="text-emerald-700 font-black text-xs">+{formatKs(grandTotalComm)} Ks</b>
                       </td>
                     </tr>
                   </tfoot>

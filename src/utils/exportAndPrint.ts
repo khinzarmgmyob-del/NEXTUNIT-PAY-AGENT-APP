@@ -107,7 +107,7 @@ export function exportToCsvBlob({
 }
 
 /**
- * Helper to download Blob safely across all browsers & WebViews
+ * Helper to download Blob safely across all browsers, iframes & WebViews
  */
 export function downloadBlob(blob: Blob, filename: string) {
   try {
@@ -116,15 +116,21 @@ export function downloadBlob(blob: Blob, filename: string) {
     link.href = url;
     link.download = filename;
     link.setAttribute('download', filename);
-    link.style.display = 'none';
+    link.style.position = 'fixed';
+    link.style.left = '-9999px';
+    link.style.top = '-9999px';
+    link.style.opacity = '0';
     document.body.appendChild(link);
+    
+    // Trigger download
     link.click();
+
     setTimeout(() => {
       if (document.body.contains(link)) {
         document.body.removeChild(link);
       }
       window.URL.revokeObjectURL(url);
-    }, 1000);
+    }, 2500);
   } catch (e) {
     console.error('downloadBlob error:', e);
   }
@@ -403,15 +409,17 @@ export async function exportAndSharePdf({
   title: string;
   isThermal?: boolean;
 }): Promise<{ success: boolean; error?: string }> {
-  // Create off-screen rendering wrapper that is fully painted but positioned off-viewport
+  // Create off-screen rendering wrapper that is mounted and computed by browser engine
   const wrapper = document.createElement('div');
   wrapper.style.position = 'fixed';
-  wrapper.style.left = '-9999px';
   wrapper.style.top = '0px';
-  wrapper.style.width = isThermal ? '400px' : '860px';
-  wrapper.style.overflow = 'visible';
+  wrapper.style.left = '0px';
+  wrapper.style.width = isThermal ? '420px' : '860px';
   wrapper.style.zIndex = '-99999';
+  wrapper.style.opacity = '0.01'; // Barely visible to paint engine, unnoticeable to user
+  wrapper.style.pointerEvents = 'none';
   wrapper.style.backgroundColor = '#ffffff';
+  wrapper.style.overflow = 'visible';
 
   const container = document.createElement('div');
   container.style.width = isThermal ? '380px' : '820px';
@@ -422,8 +430,11 @@ export async function exportAndSharePdf({
   document.body.appendChild(wrapper);
 
   try {
-    // Wait for layout/fonts to be ready
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    // Wait for fonts & DOM reflow
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
 
     const canvas = await html2canvas(container, {
       scale: 2, // 2x crisp rendering for Myanmar Unicode
@@ -473,18 +484,34 @@ export async function exportAndSharePdf({
 
     const safeFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
 
-    // 1. Direct Browser PDF Download via Blob URL (most reliable in iframe & browsers)
+    // 1. Direct Browser PDF Download via Blob URL
     const pdfBlob = pdf.output('blob');
     downloadBlob(pdfBlob, safeFilename);
 
-    // 2. Also trigger jsPDF save method
+    // 2. Also trigger jsPDF save method for maximum browser compatibility
     try {
       pdf.save(safeFilename);
     } catch (saveErr) {
       console.warn('pdf.save note:', saveErr);
     }
 
-    // 3. If running in Capacitor Native Environment (Android / iOS), also trigger Native Share
+    // 3. Web Share API with file attachment (supported in modern mobile browsers)
+    if (!Capacitor.isNativePlatform() && typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
+      try {
+        const file = new File([pdfBlob], safeFilename, { type: 'application/pdf' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: title,
+            text: `${title} - Money Agent POS PDF Report`,
+            files: [file],
+          });
+        }
+      } catch (shareErr) {
+        console.warn('Web Share note:', shareErr);
+      }
+    }
+
+    // 4. Capacitor Native Environment (Android / iOS): write file & native share sheet
     if (Capacitor.isNativePlatform()) {
       try {
         const base64DataUri = pdf.output('datauristring');

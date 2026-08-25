@@ -432,29 +432,110 @@ export async function getTransactionsPaged(
     // 3. Compute Aggregate Stats directly via SQLite for instant speed on millions of rows
     const statsSql = `
       SELECT 
-        SUM(amount) as totalAmount,
-        SUM(CASE WHEN type = 'သွင်း' THEN amount ELSE 0 END) as totalInAmount,
-        SUM(CASE WHEN type = 'ထုတ်' THEN amount ELSE 0 END) as totalOutAmount,
-        SUM(CASE WHEN type = 'လွှဲပြောင်း' THEN amount ELSE 0 END) as totalTransferAmount,
-        SUM(commission) as totalCommission,
-        SUM(CASE 
+        COALESCE(SUM(amount), 0) as totalAmount,
+        COALESCE(SUM(CASE WHEN type = 'သွင်း' THEN amount ELSE 0 END), 0) as totalInAmount,
+        COALESCE(SUM(CASE WHEN type = 'ထုတ်' THEN amount ELSE 0 END), 0) as totalOutAmount,
+        COALESCE(SUM(CASE WHEN type = 'လွှဲပြောင်း' THEN amount ELSE 0 END), 0) as totalTransferAmount,
+        COALESCE(SUM(commission), 0) as totalCommission,
+        COALESCE(SUM(CASE 
           WHEN type = 'သွင်း' THEN amount 
           WHEN type = 'ထုတ်' THEN -(CASE WHEN netPayout IS NOT NULL THEN netPayout WHEN commissionMode = 'deduct' THEN (amount - commission) ELSE amount END)
           ELSE 0 
-        END) as netCash,
-        SUM(CASE 
-          WHEN commissionChannel = 'Cash' OR (commissionChannel IS NULL AND commissionMode != 'deduct') THEN commission 
+        END), 0) as netCash,
+        COALESCE(SUM(CASE 
+          WHEN commissionChannel = 'Cash' OR (commissionChannel IS NULL AND (commissionMode IS NULL OR commissionMode != 'deduct')) THEN commission 
           ELSE 0 
-        END) as totalCashComm,
-        SUM(CASE 
+        END), 0) as totalCashComm,
+        COALESCE(SUM(CASE 
           WHEN commissionChannel = 'Wallet' OR (commissionChannel IS NULL AND commissionMode = 'deduct') THEN commission 
           ELSE 0 
-        END) as totalWalletComm
+        END), 0) as totalWalletComm
       FROM transactions 
       ${whereSql}
     `;
     const statsRes = await dbConnection.query(statsSql, params);
     const stats = statsRes.values?.[0] || {};
+
+    let totalAmount = 0;
+    let totalInAmount = 0;
+    let totalOutAmount = 0;
+    let totalTransferAmount = 0;
+    let totalCommission = 0;
+    let netCash = 0;
+    let totalCashComm = 0;
+    let totalWalletComm = 0;
+
+    if (totalCount > 0 && totalCount <= transactions.length) {
+      // 100% exact computation directly from in-memory array when all filtered items are in this page
+      for (const item of transactions) {
+        totalAmount += item.amount;
+        const comm = item.commission || 0;
+        totalCommission += comm;
+        const isCashComm = item.commissionChannel === 'Cash' || (!item.commissionChannel && item.commissionMode !== 'deduct');
+        if (isCashComm) totalCashComm += comm;
+        else totalWalletComm += comm;
+
+        if (item.type === 'သွင်း') {
+          totalInAmount += item.amount;
+          netCash += item.amount;
+        } else if (item.type === 'ထုတ်') {
+          totalOutAmount += item.amount;
+          const actual = item.netPayout !== undefined ? item.netPayout : item.commissionMode === 'deduct' ? item.amount - comm : item.amount;
+          netCash -= actual;
+        } else if (item.type === 'လွှဲပြောင်း') {
+          totalTransferAmount += item.amount;
+        }
+      }
+    } else {
+      // Robust case-insensitive reader for SQLite WASM / native driver results
+      const getStat = (obj: any, ...keys: string[]): number => {
+        if (!obj) return 0;
+        for (const k of keys) {
+          if (obj[k] !== undefined && obj[k] !== null) return Number(obj[k]) || 0;
+          if (obj[k.toLowerCase()] !== undefined && obj[k.toLowerCase()] !== null) return Number(obj[k.toLowerCase()]) || 0;
+        }
+        for (const objKey of Object.keys(obj)) {
+          for (const k of keys) {
+            if (objKey.toLowerCase() === k.toLowerCase()) {
+              return Number(obj[objKey]) || 0;
+            }
+          }
+        }
+        return 0;
+      };
+
+      totalAmount = getStat(stats, 'totalAmount', 'total_amount', 'totalamount', 'SUM(amount)');
+      totalInAmount = getStat(stats, 'totalInAmount', 'total_in', 'totalinamount');
+      totalOutAmount = getStat(stats, 'totalOutAmount', 'total_out', 'totaloutamount');
+      totalTransferAmount = getStat(stats, 'totalTransferAmount', 'total_transfer', 'totaltransferamount');
+      totalCommission = getStat(stats, 'totalCommission', 'total_comm', 'totalcommission', 'SUM(commission)');
+      netCash = getStat(stats, 'netCash', 'net_cash', 'netcash');
+      totalCashComm = getStat(stats, 'totalCashComm', 'total_cash_comm', 'totalcashcomm');
+      totalWalletComm = getStat(stats, 'totalWalletComm', 'total_wallet_comm', 'totalwalletcomm');
+
+      // Safety fallback: if SQL aggregate returned 0 but we have rows
+      if (totalAmount === 0 && transactions.length > 0) {
+        for (const item of transactions) {
+          totalAmount += item.amount;
+          const comm = item.commission || 0;
+          totalCommission += comm;
+          const isCashComm = item.commissionChannel === 'Cash' || (!item.commissionChannel && item.commissionMode !== 'deduct');
+          if (isCashComm) totalCashComm += comm;
+          else totalWalletComm += comm;
+
+          if (item.type === 'သွင်း') {
+            totalInAmount += item.amount;
+            netCash += item.amount;
+          } else if (item.type === 'ထုတ်') {
+            totalOutAmount += item.amount;
+            const actual = item.netPayout !== undefined ? item.netPayout : item.commissionMode === 'deduct' ? item.amount - comm : item.amount;
+            netCash -= actual;
+          } else if (item.type === 'လွှဲပြောင်း') {
+            totalTransferAmount += item.amount;
+          }
+        }
+      }
+    }
 
     return {
       transactions,
@@ -462,14 +543,14 @@ export async function getTransactionsPaged(
       totalPages,
       currentPage: page,
       pageSize,
-      totalAmount: Number(stats.totalAmount || 0),
-      totalInAmount: Number(stats.totalInAmount || 0),
-      totalOutAmount: Number(stats.totalOutAmount || 0),
-      totalTransferAmount: Number(stats.totalTransferAmount || 0),
-      totalCommission: Number(stats.totalCommission || 0),
-      netCash: Number(stats.netCash || 0),
-      totalCashComm: Number(stats.totalCashComm || 0),
-      totalWalletComm: Number(stats.totalWalletComm || 0),
+      totalAmount,
+      totalInAmount,
+      totalOutAmount,
+      totalTransferAmount,
+      totalCommission,
+      netCash,
+      totalCashComm,
+      totalWalletComm,
     };
   } catch (err) {
     console.error('getTransactionsPaged SQLite Error:', err);
