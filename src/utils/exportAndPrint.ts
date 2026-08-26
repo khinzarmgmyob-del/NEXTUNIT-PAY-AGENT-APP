@@ -1,9 +1,4 @@
 import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
-import { Capacitor } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
 import { ShopProfile, Transaction } from '../types';
 import { formatKs } from './formatters';
 
@@ -173,7 +168,7 @@ export function buildReportHtmlMarkup({
   const cardsHtml =
     summaryCards.length > 0
       ? `
-      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 12px;">
         ${summaryCards
           .map(
             (c) => `
@@ -237,9 +232,15 @@ export function buildReportHtmlMarkup({
           ${summaryRow
             .map((cell, colIdx) => {
               const align = alignStyles[colIdx] || 'left';
-              return `<td style="border: 1px solid #94a3b8; padding: 6px 8px; font-size: 10px; text-align: ${align}; font-weight: bold; color: #0f172a;">${
-                cell !== undefined && cell !== null ? cell : ''
-              }</td>`;
+              const cellStr = cell !== undefined && cell !== null ? String(cell) : '';
+              const isPositive = cellStr.startsWith('+');
+              const isNegative = cellStr.startsWith('-');
+              const colorStyle = isPositive
+                ? 'color: #047857;'
+                : isNegative
+                ? 'color: #b91c1c;'
+                : 'color: #0f172a;';
+              return `<td style="border: 1px solid #94a3b8; padding: 6px 8px; font-size: 10px; text-align: ${align}; font-weight: bold; ${colorStyle}">${cellStr}</td>`;
             })
             .join('')}
         </tr>
@@ -250,7 +251,7 @@ export function buildReportHtmlMarkup({
   `;
 
   return `
-    <div style="font-family: 'Plus Jakarta Sans', 'Pyidaungsu', 'Padauk', Arial, sans-serif; color: #0f172a; background: #fff; padding: 16px; font-size: 11px; line-height: 1.4; width: 100%;">
+    <div class="report-content" style="font-family: 'Plus Jakarta Sans', 'Pyidaungsu', 'Padauk', Arial, sans-serif; color: #0f172a; background: #fff; padding: 12px; font-size: 11px; line-height: 1.4; width: 100%;">
       <div style="text-align: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid #0f172a;">
         <div style="font-size: 18px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase;">${shopName}</div>
         ${shopAddress || shopPhone ? `<div style="font-size: 11px; color: #475569; margin-top: 2px;">${[shopAddress, shopPhone].filter(Boolean).join(' • ')}</div>` : ''}
@@ -265,9 +266,9 @@ export function buildReportHtmlMarkup({
         ${tbodyHtml}
       </table>
 
-      <div style="margin-top: 20px; padding-top: 8px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; font-size: 9px; color: #64748b;">
+      <div style="margin-top: 16px; padding-top: 8px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; font-size: 9px; color: #64748b;">
         <div>စာရင်းပေါင်း: ${tableRows.length} ခု</div>
-        <div>System: Money Agent POS</div>
+        <div>ထုတ်ယူသည့်စနစ်: Money Agent POS</div>
       </div>
     </div>
   `;
@@ -392,317 +393,382 @@ export function buildReceiptHtmlMarkup(transactionOrHtml: Transaction | string, 
 }
 
 /**
- * Robust HTML to PDF Generator and Direct Download / Capacitor Share
- * 1. Renders HTML in high DPI canvas using offscreen positioned wrapper
- * 2. Compiles to clean A4 / Receipt PDF using jsPDF
- * 3. Triggers immediate automatic file download as .pdf
- * 4. Also shares via Native Sheet on Android/iOS Capacitor
+ * Generates standalone full HTML document with embedded CSS Media Print rules for Auto-Fit & A4 Portrait
  */
-export async function exportAndSharePdf({
-  htmlContent,
-  filename,
-  title,
-  isThermal = false,
-}: {
-  htmlContent: string;
-  filename: string;
-  title: string;
-  isThermal?: boolean;
-}): Promise<{ success: boolean; error?: string }> {
-  // Create off-screen rendering wrapper that is mounted and computed by browser engine
-  const wrapper = document.createElement('div');
-  wrapper.style.position = 'fixed';
-  wrapper.style.top = '0px';
-  wrapper.style.left = '0px';
-  wrapper.style.width = isThermal ? '420px' : '860px';
-  wrapper.style.zIndex = '-99999';
-  wrapper.style.opacity = '0.01'; // Barely visible to paint engine, unnoticeable to user
-  wrapper.style.pointerEvents = 'none';
-  wrapper.style.backgroundColor = '#ffffff';
-  wrapper.style.overflow = 'visible';
-
-  const container = document.createElement('div');
-  container.style.width = isThermal ? '380px' : '820px';
-  container.style.backgroundColor = '#ffffff';
-  container.style.color = '#000000';
-  container.innerHTML = htmlContent;
-  wrapper.appendChild(container);
-  document.body.appendChild(wrapper);
-
-  try {
-    // Wait for fonts & DOM reflow
-    if (document.fonts && document.fonts.ready) {
-      await document.fonts.ready;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-
-    const canvas = await html2canvas(container, {
-      scale: 2, // 2x crisp rendering for Myanmar Unicode
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      windowWidth: isThermal ? 450 : 920,
-      scrollX: 0,
-      scrollY: 0,
-    });
-
-    const imgData = canvas.toDataURL('image/png');
-
-    let pdf: jsPDF;
-    if (isThermal) {
-      // Thermal 80mm format
-      const pdfWidth = 80;
-      const pdfHeight = Math.max(80, (canvas.height * pdfWidth) / canvas.width);
-      pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: [pdfWidth, pdfHeight],
-      });
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
-    } else {
-      // A4 portrait format with standard page margins
-      pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = 210;
-      const pageHeight = 297;
-      const margin = 8;
-      const imgWidth = pageWidth - margin * 2;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = margin;
-
-      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight, undefined, 'FAST');
-      heightLeft -= (pageHeight - margin * 2);
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight + margin;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight, undefined, 'FAST');
-        heightLeft -= (pageHeight - margin * 2);
+export function generateFullReportHtmlDocument(options: PrintReportOptions): string {
+  const content = buildReportHtmlMarkup(options);
+  return `<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes" />
+  <title>${options.title}</title>
+  <style>
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 10mm;
+      }
+      body {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      /* Report Container ကို စာရွက်အကျယ်နဲ့ Auto Fit ဖြစ်အောင် ညှိခြင်း */
+      .report-container, table {
+        width: 100% !important;
+        max-width: 100% !important;
+        table-layout: fixed !important;
+        word-wrap: break-word !important;
+        font-size: 10pt !important; /* Auto scale font size */
+      }
+      /* Print တွင် မပါချင်သော App Header/Buttons များကို ဖျောက်ခြင်း */
+      .no-print, button, navbar, .action-bar {
+        display: none !important;
+      }
+      th, td {
+        border: 1px solid #94a3b8 !important;
+        padding: 4px 6px !important;
+        color: #000000 !important;
+      }
+      th {
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
+        font-weight: bold !important;
+      }
+      tr {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
       }
     }
-
-    const safeFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
-
-    // 1. Direct Browser PDF Download via Blob URL
-    const pdfBlob = pdf.output('blob');
-    downloadBlob(pdfBlob, safeFilename);
-
-    // 2. Also trigger jsPDF save method for maximum browser compatibility
-    try {
-      pdf.save(safeFilename);
-    } catch (saveErr) {
-      console.warn('pdf.save note:', saveErr);
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-
-    // 3. Web Share API with file attachment (supported in modern mobile browsers)
-    if (!Capacitor.isNativePlatform() && typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
-      try {
-        const file = new File([pdfBlob], safeFilename, { type: 'application/pdf' });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            title: title,
-            text: `${title} - Money Agent POS PDF Report`,
-            files: [file],
-          });
+    body {
+      font-family: 'Plus Jakarta Sans', 'Pyidaungsu', 'Padauk', Arial, sans-serif;
+      color: #0f172a;
+      background: #f8fafc;
+      padding: 16px;
+      font-size: 11px;
+      line-height: 1.4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .action-bar {
+      width: 100%;
+      max-width: 900px;
+      margin-bottom: 14px;
+      padding: 10px 16px;
+      background: #1e293b;
+      color: #ffffff;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    }
+    .action-btn {
+      background: #4f46e5;
+      color: #ffffff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .action-btn:hover {
+      background: #4338ca;
+    }
+    .close-btn {
+      background: #475569;
+      color: #ffffff;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .close-btn:hover {
+      background: #334155;
+    }
+    .report-container {
+      width: 100%;
+      max-width: 900px;
+      background: #ffffff;
+      padding: 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="action-bar no-print">
+    <div style="font-weight: bold; font-size: 13px;">📄 ${options.title}</div>
+    <div style="display:flex; gap: 8px;">
+      <button class="action-btn" onclick="window.print()">🖨️ စာရွက်ထုတ်မည် / Save as PDF</button>
+      <button class="close-btn" onclick="window.close()">❌ ပိတ်မည်</button>
+    </div>
+  </div>
+  <div class="report-container">
+    ${content}
+  </div>
+  <script>
+    // Auto trigger print when loaded
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        try {
+          window.print();
+        } catch(e) {
+          console.warn('Auto print failed:', e);
         }
-      } catch (shareErr) {
-        console.warn('Web Share note:', shareErr);
+      }, 350);
+    });
+  </script>
+</body>
+</html>`;
+}
+
+/**
+ * Generates standalone full HTML document for Receipt Voucher with Native Print rules
+ */
+export function generateFullReceiptHtmlDocument(transactionOrHtml: Transaction | string, shopProfile?: ShopProfile): string {
+  const content = buildReceiptHtmlMarkup(transactionOrHtml, shopProfile);
+  const txId = typeof transactionOrHtml === 'object' ? transactionOrHtml.id : 'Receipt';
+  return `<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ပြေစာလက်မှတ် #${txId}</title>
+  <style>
+    @media print {
+      @page {
+        size: 80mm auto;
+        margin: 4mm;
+      }
+      body {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .no-print, button, navbar, .action-bar {
+        display: none !important;
+      }
+      .receipt-container {
+        width: 76mm !important;
+        max-width: 100% !important;
+        margin: 0 auto !important;
+        border: none !important;
+        padding: 4px !important;
       }
     }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Plus Jakarta Sans', 'Pyidaungsu', 'Padauk', Arial, monospace;
+      color: #000000;
+      background: #f1f5f9;
+      padding: 16px;
+      font-size: 11px;
+      line-height: 1.35;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .action-bar {
+      width: 100%;
+      max-width: 360px;
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      background: #1e293b;
+      color: #ffffff;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .action-btn {
+      background: #4f46e5;
+      color: #ffffff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .close-btn {
+      background: #475569;
+      color: #ffffff;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .receipt-container {
+      width: 350px;
+      max-width: 100%;
+      background: #ffffff;
+      padding: 16px;
+      border: 1px dashed #64748b;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+  </style>
+</head>
+<body>
+  <div class="action-bar no-print">
+    <div style="font-weight: bold; font-size: 12px;">🧾 ပြေစာလက်မှတ် #${txId}</div>
+    <div style="display:flex; gap: 6px;">
+      <button class="action-btn" onclick="window.print()">🖨️ Print</button>
+      <button class="close-btn" onclick="window.close()">❌ ပိတ်</button>
+    </div>
+  </div>
+  <div class="receipt-container">
+    ${content}
+  </div>
+  <script>
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        try {
+          window.print();
+        } catch(e) {
+          console.warn('Auto print failed:', e);
+        }
+      }, 300);
+    });
+  </script>
+</body>
+</html>`;
+}
 
-    // 4. Capacitor Native Environment (Android / iOS): write file & native share sheet
-    if (Capacitor.isNativePlatform()) {
-      try {
-        const base64DataUri = pdf.output('datauristring');
-        const base64Clean = base64DataUri.replace(/^data:application\/pdf;filename=[^;]+;base64,/, '').replace(/^data:application\/pdf;base64,/, '');
-
-        const writeResult = await Filesystem.writeFile({
-          path: safeFilename,
-          data: base64Clean,
-          directory: Directory.Cache,
-        });
-
-        await Share.share({
-          title: title,
-          text: `${title} - Money Agent POS PDF Report`,
-          url: writeResult.uri,
-          dialogTitle: 'Share PDF via Viber, Telegram or Save to Files',
-        });
-      } catch (nativeErr: any) {
-        console.warn('Native Capacitor Share note:', nativeErr);
-      }
+/**
+ * 100% Reliable Native Browser Print & Preview Engine
+ * 1. Creates an isolated dynamic iframe to trigger window.print() directly
+ * 2. If iframe print is blocked by WebView, opens Blob HTML Preview Window with auto-print & Save as PDF
+ */
+export function executeNativePrintOrPreview(htmlContent: string, title: string = 'Report') {
+  try {
+    let iframe = document.getElementById('pos-print-iframe') as HTMLIFrameElement | null;
+    if (iframe && document.body.contains(iframe)) {
+      document.body.removeChild(iframe);
     }
 
-    return { success: true };
-  } catch (error: any) {
-    console.error('PDF Generation / Export error:', error);
-    return { success: false, error: error?.message || 'PDF ထုတ်ယူရာတွင် အမှားတစ်ခု ဖြစ်ပေါ်ခဲ့ပါသည်။' };
-  } finally {
-    if (document.body.contains(wrapper)) {
-      document.body.removeChild(wrapper);
+    iframe = document.createElement('iframe');
+    iframe.id = 'pos-print-iframe';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (doc) {
+      doc.open();
+      doc.write(htmlContent);
+      doc.close();
+
+      setTimeout(() => {
+        try {
+          iframe?.contentWindow?.focus();
+          iframe?.contentWindow?.print();
+        } catch (e) {
+          console.warn('Iframe print failed, falling back to Blob Preview / window.open:', e);
+          fallbackBlobPreview(htmlContent, title);
+        }
+      }, 350);
+      return;
     }
+  } catch (err) {
+    console.warn('Direct iframe creation error:', err);
+  }
+
+  // Fallback to Blob window / preview if iframe fails or running inside webview without iframe print
+  fallbackBlobPreview(htmlContent, title);
+}
+
+function fallbackBlobPreview(htmlContent: string, title: string) {
+  try {
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (!win) {
+      // If popup blocker blocked window.open, create a download/open link
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.click();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  } catch (e) {
+    console.error('Blob preview failed, trying window.print():', e);
+    window.print();
   }
 }
 
 /**
- * Helper to Export Formatted Report as PDF & Native Share
+ * Helper to Export Formatted Report as PDF / Native Print & Share
  */
 export async function exportReportToPdfAndShare(options: PrintReportOptions & { filename?: string }): Promise<boolean> {
-  const html = buildReportHtmlMarkup(options);
-  const safeFilename = options.filename || `${options.title.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
-  const result = await exportAndSharePdf({
-    htmlContent: html,
-    filename: safeFilename,
-    title: options.title,
-    isThermal: false,
-  });
-  return result.success;
+  const fullHtml = generateFullReportHtmlDocument(options);
+  executeNativePrintOrPreview(fullHtml, options.title);
+  return true;
 }
 
 /**
- * Helper to Export Receipt Voucher as PDF & Native Share
+ * Helper to Export Receipt Voucher as PDF / Native Print & Share
  */
 export async function exportReceiptToPdfAndShare(
   transactionOrHtml: Transaction | string,
   shopProfile?: ShopProfile,
   filename?: string
 ): Promise<boolean> {
-  const html = buildReceiptHtmlMarkup(transactionOrHtml, shopProfile);
+  const fullHtml = generateFullReceiptHtmlDocument(transactionOrHtml, shopProfile);
   const txId = typeof transactionOrHtml === 'object' ? transactionOrHtml.id : 'Voucher';
-  const safeFilename = filename || `Receipt_Voucher_${txId}_${Date.now()}.pdf`;
-  const result = await exportAndSharePdf({
-    htmlContent: html,
-    filename: safeFilename,
-    title: `ပြေစာလက်မှတ် #${txId}`,
-    isThermal: true,
-  });
-  return result.success;
+  executeNativePrintOrPreview(fullHtml, `Receipt_${txId}`);
+  return true;
 }
 
 /**
  * Printable Report Helper
- * Generates an isolated, beautifully styled print window/iframe
+ * Generates an isolated, beautifully styled print window/iframe with Auto Justify
  */
 export function printFormattedReport(options: PrintReportOptions) {
-  const innerHtml = buildReportHtmlMarkup(options);
-  const fullHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8" />
-      <title>${options.title}</title>
-      <style>
-        @page {
-          size: A4 portrait;
-          margin: 10mm 10mm 12mm 10mm;
-        }
-        * {
-          box-sizing: border-box;
-          margin: 0;
-          padding: 0;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-        body {
-          font-family: 'Plus Jakarta Sans', 'Pyidaungsu', 'Padauk', Arial, sans-serif;
-          color: #0f172a;
-          background: #fff;
-          padding: 12px;
-          font-size: 11px;
-          line-height: 1.4;
-        }
-      </style>
-    </head>
-    <body>
-      ${innerHtml}
-    </body>
-    </html>
-  `;
-  executePrintHtml(fullHtml);
+  const fullHtml = generateFullReportHtmlDocument(options);
+  executeNativePrintOrPreview(fullHtml, options.title);
 }
 
 /**
  * Print Transaction Receipt Directly
  */
 export function printReceiptDocument(transactionOrHtml: Transaction | string, shopProfile?: ShopProfile) {
-  const innerHtml = buildReceiptHtmlMarkup(transactionOrHtml, shopProfile);
-  const fullHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8" />
-      <title>Receipt</title>
-      <style>
-        @page {
-          size: 80mm auto;
-          margin: 0;
-        }
-        * {
-          box-sizing: border-box;
-          margin: 0;
-          padding: 0;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-        body {
-          font-family: 'Plus Jakarta Sans', 'Pyidaungsu', 'Padauk', Arial, monospace;
-          color: #000;
-          background: #fff;
-          padding: 8px;
-          font-size: 11px;
-          line-height: 1.35;
-          width: 76mm;
-          margin: 0 auto;
-        }
-      </style>
-    </head>
-    <body>
-      ${innerHtml}
-    </body>
-    </html>
-  `;
-  executePrintHtml(fullHtml);
-}
-
-/**
- * Spawns an isolated invisible iframe to trigger print reliably inside iframes and WebViews
- */
-function executePrintHtml(htmlContent: string) {
-  let iframe = document.getElementById('pos-print-iframe') as HTMLIFrameElement | null;
-  if (iframe) {
-    document.body.removeChild(iframe);
-  }
-
-  iframe = document.createElement('iframe');
-  iframe.id = 'pos-print-iframe';
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  iframe.style.visibility = 'hidden';
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentWindow?.document || iframe.contentDocument;
-  if (!doc) {
-    window.print();
-    return;
-  }
-
-  doc.open();
-  doc.write(htmlContent);
-  doc.close();
-
-  // Trigger print once styles/fonts are loaded
-  setTimeout(() => {
-    try {
-      iframe?.contentWindow?.focus();
-      iframe?.contentWindow?.print();
-    } catch (e) {
-      console.warn('Iframe print failed, falling back to window.print():', e);
-      window.print();
-    }
-  }, 400);
+  const fullHtml = generateFullReceiptHtmlDocument(transactionOrHtml, shopProfile);
+  const txId = typeof transactionOrHtml === 'object' ? transactionOrHtml.id : 'Receipt';
+  executeNativePrintOrPreview(fullHtml, `Receipt_${txId}`);
 }

@@ -65,12 +65,41 @@
   overscroll-behavior-x: contain;
 }
 
-/* Comprehensive Print Optimization */
+/* Comprehensive Print Optimization & Auto Justify for PDF/Print */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
   body {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background-color: #ffffff !important;
     color: #000000 !important;
-    font-size: 11pt;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Report Container ကို စာရွက်အကျယ်နဲ့ Auto Fit ဖြစ်အောင် ညှိခြင်း */
+  .report-container,
+  table {
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    word-wrap: break-word !important;
+    font-size: 10pt !important; /* Auto scale font size */
+  }
+
+  /* Print တွင် မပါချင်သော App Header/Buttons များကို ဖျောက်ခြင်း */
+  .no-print,
+  button,
+  navbar,
+  input,
+  select,
+  .print\:hidden {
+    display: none !important;
   }
 
   /* Hide backdrop blur & background widgets */
@@ -86,6 +115,11 @@
   .max-h-\[94vh\],
   .max-h-\[92vh\],
   .max-h-\[90vh\],
+  .max-h-\[88vh\],
+  .max-h-\[85vh\],
+  .max-h-\[64vh\],
+  .max-h-\[58vh\],
+  .max-h-\[56vh\],
   .overflow-y-auto,
   .overflow-x-auto {
     max-height: none !important;
@@ -94,18 +128,8 @@
     border: none !important;
   }
 
-  /* Hide interactive controls, buttons, search, inputs during printing */
-  button,
-  input,
-  select,
-  .no-print,
-  .print\:hidden {
-    display: none !important;
-  }
-
   /* Table styling */
   table {
-    width: 100% !important;
     border-collapse: collapse !important;
   }
 
@@ -118,6 +142,13 @@
 
   th {
     background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    font-weight: bold !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }
 

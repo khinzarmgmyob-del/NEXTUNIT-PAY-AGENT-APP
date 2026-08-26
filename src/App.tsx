@@ -1592,7 +1592,7 @@ export default function App() {
                                 ? 'text-sky-700 dark:text-sky-400'
                                 : isCashOut
                                 ? 'text-red-600 dark:text-red-400'
-                                : 'text-slate-900 dark:text-slate-100'
+                                : 'text-emerald-700 dark:text-emerald-400'
                             }`}
                           >
                             <div>
@@ -1600,7 +1600,7 @@ export default function App() {
                                 ? formatKs(item.amount)
                                 : isCashOut
                                 ? `- ${actualCash.toLocaleString()}`
-                                : actualCash.toLocaleString()} Ks
+                                : `+ ${actualCash.toLocaleString()}`} Ks
                             </div>
                           </td>
 

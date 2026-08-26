@@ -153,6 +153,14 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     .filter((t) => t.type === 'ထုတ်')
     .reduce((sum, item) => sum + getActualCashAmount(item), 0);
 
+  const totalInOriginal = filteredData
+    .filter((t) => t.type === 'သွင်း')
+    .reduce((sum, item) => sum + item.amount, 0);
+
+  const totalOutOriginal = filteredData
+    .filter((t) => t.type === 'ထုတ်')
+    .reduce((sum, item) => sum + item.amount, 0);
+
   const totalTransferVolume = filteredData
     .filter((t) => t.type === 'လွှဲပြောင်း')
     .reduce((sum, item) => sum + item.amount, 0);
@@ -160,6 +168,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const totalVolume = filteredData.reduce((sum, item) => sum + item.amount, 0);
 
   const netAmount = totalIn - totalOut;
+  const netOriginalAmount = totalInOriginal - totalOutOriginal;
 
   // Calculate Cash Commission vs Wallet Commission vs Total Commission
   const totalCashComm = filteredData.reduce((sum, item) => sum + getCommissionBreakdown(item).cashComm, 0);
@@ -199,19 +208,31 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           : 'သက်သက်ပေး (ငွေသား ကော်မရှင်)'
         : 'ငွေသား ကော်မရှင်';
 
+      const formattedActualCash = isTransfer
+        ? `${formatKs(d.amount)} Ks`
+        : isCashOut
+        ? `-${formatKs(actualCash)} Ks`
+        : `+${formatKs(actualCash)} Ks`;
+
+      const formattedOriginalAmount = isTransfer
+        ? `${formatKs(d.amount)} Ks`
+        : isCashOut
+        ? `-${formatKs(d.amount)} Ks`
+        : `+${formatKs(d.amount)} Ks`;
+
       return [
         index + 1,
         d.date,
         d.time || '-',
         d.customerName,
         d.type,
-        actualCash,
-        d.amount,
-        cashComm,
-        walletComm,
-        d.commission,
+        formattedActualCash,
+        formattedOriginalAmount,
+        cashComm > 0 ? `+${formatKs(cashComm)} Ks` : '-',
+        walletComm > 0 ? `+${formatKs(walletComm)} Ks` : '-',
+        d.commission > 0 ? `+${formatKs(d.commission)} Ks` : '-',
         commModeLabel,
-        d.phone,
+        d.phone || '-',
         d.walletName,
         d.targetWalletName || '-',
         d.cashAccountName || '-',
@@ -227,22 +248,22 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     }
     const rows = getReportRows();
     const summaryRow = [
-      'စုစုပေါင်း',
+      'စုစုပေါင်း Total',
       '',
       '',
       '',
       '',
-      netAmount,
-      totalIn + totalOut,
-      totalCashComm,
-      totalWalletComm,
-      grandTotalComm,
+      `${netAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netAmount))} Ks`,
+      `${netOriginalAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netOriginalAmount))} Ks`,
+      `+${formatKs(totalCashComm)} Ks`,
+      `+${formatKs(totalWalletComm)} Ks`,
+      `+${formatKs(grandTotalComm)} Ks`,
       '',
       '',
       '',
       '',
       '',
-      `စာရင်း ${filteredData.length} ခု`,
+      `စာရင်းပေါင်း ${filteredData.length} ခု`,
     ];
 
     exportToExcelXlsx({
@@ -270,22 +291,22 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const handlePrint = () => {
     const rows = getReportRows();
     const summaryRow = [
-      'စုစုပေါင်း',
+      'စုစုပေါင်း Total',
       '',
       '',
       '',
       '',
-      `${formatKs(netAmount)} Ks`,
-      `${formatKs(totalIn + totalOut)} Ks`,
-      `${formatKs(totalCashComm)} Ks`,
-      `${formatKs(totalWalletComm)} Ks`,
+      `${netAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netAmount))} Ks`,
+      `${netOriginalAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netOriginalAmount))} Ks`,
+      `+${formatKs(totalCashComm)} Ks`,
+      `+${formatKs(totalWalletComm)} Ks`,
       `+${formatKs(grandTotalComm)} Ks`,
       '',
       '',
       '',
       '',
       '',
-      '',
+      `စာရင်းပေါင်း ${filteredData.length} ခု`,
     ];
 
     printFormattedReport({
@@ -293,10 +314,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
       shopProfile,
       summaryCards: [
-        { label: 'ငွေသွင်း (Cash In)', value: `${formatKs(totalIn)} Ks`, note: 'လက်ငင်းငွေသားဝင်' },
-        { label: 'ငွေထုတ် (Cash Out)', value: `${formatKs(totalOut)} Ks`, note: 'လက်ငင်းငွေသားထုတ်' },
+        { label: 'ငွေသွင်း (Cash In)', value: `+${formatKs(totalIn)} Ks`, note: 'လက်ငင်းငွေသားဝင်' },
+        { label: 'ငွေထုတ် (Cash Out)', value: `-${formatKs(totalOut)} Ks`, note: 'လက်ငင်းငွေသားထုတ်' },
         { label: 'ကော်မရှင်ရငွေ', value: `+${formatKs(grandTotalComm)} Ks`, note: `Cash:${formatKs(totalCashComm)} | W:${formatKs(totalWalletComm)}` },
-        { label: 'စာရင်း အရေအတွက်', value: `${filteredData.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(totalTransferVolume)}` },
+        { label: 'စာရင်း အရေအတွက်', value: `${filteredData.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(totalTransferVolume)} Ks` },
       ],
       tableHeaders: headersList,
       tableRows: rows,
@@ -306,7 +327,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
-  // Export PDF & Native Share
+  // Export PDF & Native Print / Save
   const handleExportPdf = async () => {
     if (filteredData.length === 0) {
       alert('PDF ထုတ်ယူရန် ဒေတာ မရှိပါ။');
@@ -316,21 +337,22 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     try {
       const rows = getReportRows();
       const summaryRow = [
-        'စုစုပေါင်း',
+        'စုစုပေါင်း Total',
         '',
         '',
         '',
-        `${formatKs(netAmount)} Ks`,
-        `${formatKs(totalIn + totalOut)} Ks`,
-        `${formatKs(totalCashComm)} Ks`,
-        `${formatKs(totalWalletComm)} Ks`,
+        '',
+        `${netAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netAmount))} Ks`,
+        `${netOriginalAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netOriginalAmount))} Ks`,
+        `+${formatKs(totalCashComm)} Ks`,
+        `+${formatKs(totalWalletComm)} Ks`,
         `+${formatKs(grandTotalComm)} Ks`,
         '',
         '',
         '',
         '',
         '',
-        '',
+        `စာရင်းပေါင်း ${filteredData.length} ခု`,
       ];
 
       await exportReportToPdfAndShare({
@@ -338,10 +360,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
         shopProfile,
         summaryCards: [
-          { label: 'ငွေသွင်း (Cash In)', value: `${formatKs(totalIn)} Ks`, note: 'လက်ငင်းငွေသားဝင်' },
-          { label: 'ငွေထုတ် (Cash Out)', value: `${formatKs(totalOut)} Ks`, note: 'လက်ငင်းငွေသားထုတ်' },
+          { label: 'ငွေသွင်း (Cash In)', value: `+${formatKs(totalIn)} Ks`, note: 'လက်ငင်းငွေသားဝင်' },
+          { label: 'ငွေထုတ် (Cash Out)', value: `-${formatKs(totalOut)} Ks`, note: 'လက်ငင်းငွေသားထုတ်' },
           { label: 'ကော်မရှင်ရငွေ', value: `+${formatKs(grandTotalComm)} Ks`, note: `Cash:${formatKs(totalCashComm)} | W:${formatKs(totalWalletComm)}` },
-          { label: 'စာရင်း အရေအတွက်', value: `${filteredData.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(totalTransferVolume)}` },
+          { label: 'စာရင်း အရေအတွက်', value: `${filteredData.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(totalTransferVolume)} Ks` },
         ],
         tableHeaders: headersList,
         tableRows: rows,
@@ -857,19 +879,31 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                                 ? 'text-sky-700'
                                 : isCashOut
                                 ? 'text-red-600'
-                                : 'text-slate-800'
+                                : 'text-emerald-700'
                             }`}
                           >
                             {isTransfer
                               ? formatKs(item.amount)
                               : isCashOut
                               ? `- ${actualCash.toLocaleString()} Ks`
-                              : `${actualCash.toLocaleString()} Ks`}
+                              : `+ ${actualCash.toLocaleString()} Ks`}
                           </td>
 
-                          {/* Original Amount */}
-                          <td className="p-2.5 text-right font-semibold text-slate-700 whitespace-nowrap">
-                            {item.amount.toLocaleString()} Ks
+                          {/* Original Amount (မူလလွှဲငွေ) */}
+                          <td
+                            className={`p-2.5 text-right font-bold whitespace-nowrap ${
+                              isTransfer
+                                ? 'text-slate-700'
+                                : isCashOut
+                                ? 'text-red-600'
+                                : 'text-emerald-700'
+                            }`}
+                          >
+                            {isTransfer
+                              ? `${item.amount.toLocaleString()} Ks`
+                              : isCashOut
+                              ? `- ${item.amount.toLocaleString()} Ks`
+                              : `+ ${item.amount.toLocaleString()} Ks`}
                           </td>
 
                           {/* Cash Commission */}
@@ -938,22 +972,32 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                       <td colSpan={4} className="p-2.5 text-right font-bold text-slate-900">
                         စုစုပေါင်း Total ({filteredData.length} ခု):
                       </td>
+                      {/* Actual Cash Column Footer */}
                       <td
-                        className={`p-2.5 text-right whitespace-nowrap ${
-                          netAmount >= 0 ? 'text-indigo-700' : 'text-red-600'
+                        className={`p-2.5 text-right whitespace-nowrap font-black ${
+                          netAmount >= 0 ? 'text-emerald-700' : 'text-red-600'
                         }`}
                       >
-                        {netAmount >= 0 ? `+${formatKs(netAmount)}` : `-${formatKs(Math.abs(netAmount))}`}
+                        {netAmount >= 0 ? `+${formatKs(netAmount)} Ks` : `-${formatKs(Math.abs(netAmount))} Ks`}
                       </td>
-                      <td className="p-2.5 text-right whitespace-nowrap text-slate-900 font-black">
-                        {formatKs(totalVolume)} Ks
+                      {/* Original Amount Column Footer */}
+                      <td
+                        className={`p-2.5 text-right whitespace-nowrap font-black ${
+                          netOriginalAmount >= 0 ? 'text-emerald-700' : 'text-red-600'
+                        }`}
+                      >
+                        <div>{netOriginalAmount >= 0 ? `+${formatKs(netOriginalAmount)} Ks` : `-${formatKs(Math.abs(netOriginalAmount))} Ks`}</div>
+                        <div className="text-[10px] text-slate-500 font-medium">စုစုပေါင်း: {formatKs(totalVolume)} Ks</div>
                       </td>
+                      {/* Cash Commission Column Footer */}
                       <td className="p-2.5 text-right whitespace-nowrap text-amber-800 bg-amber-100/50 font-black">
-                        +{formatKs(totalCashComm)}
+                        +{formatKs(totalCashComm)} Ks
                       </td>
+                      {/* Wallet Commission Column Footer */}
                       <td className="p-2.5 text-right whitespace-nowrap text-purple-800 bg-purple-100/50 font-black">
-                        +{formatKs(totalWalletComm)}
+                        +{formatKs(totalWalletComm)} Ks
                       </td>
+                      {/* Accounts & Actions Footers */}
                       <td colSpan={3} className="p-2.5 whitespace-nowrap text-indigo-900">
                         👉 စုစုပေါင်း ကော်မရှင်: <b className="text-emerald-700 font-black text-xs">+{formatKs(grandTotalComm)} Ks</b>
                       </td>
