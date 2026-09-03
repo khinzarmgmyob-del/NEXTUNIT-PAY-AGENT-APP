@@ -1,10 +1,15 @@
 import * as XLSX from 'xlsx';
+import { Capacitor } from '@capacitor/core';
 import { ShopProfile, Transaction } from '../types';
 import { formatKs } from './formatters';
+import { exportToExcelNative, exportToPdfNative, saveAndOpenFileNative } from './nativeFileExporter';
+
+export { exportToExcelNative, exportToPdfNative, saveAndOpenFileNative };
 
 /**
  * Robust Excel (.xlsx) Exporter using SheetJS
  * Formats numbers as actual numbers, creates clean column widths, and handles Myanmar Unicode.
+ * Automatically delegates to Capacitor Filesystem + FileOpener when on mobile native.
  */
 export function exportToExcelXlsx({
   filename,
@@ -19,6 +24,17 @@ export function exportToExcelXlsx({
   rows: (string | number)[][];
   summaryRow?: (string | number)[];
 }) {
+  // On Native Mobile (Android / iOS): Use Capacitor Filesystem + FileOpener
+  if (Capacitor.isNativePlatform()) {
+    exportToExcelNative({
+      filename,
+      sheetName,
+      headers,
+      rows,
+      summaryRow,
+    }).catch((err) => console.error('exportToExcelNative error:', err));
+    return true;
+  }
   try {
     const wb = XLSX.utils.book_new();
 
@@ -736,6 +752,11 @@ function fallbackBlobPreview(htmlContent: string, title: string) {
  * Helper to Export Formatted Report as PDF / Native Print & Share
  */
 export async function exportReportToPdfAndShare(options: PrintReportOptions & { filename?: string }): Promise<boolean> {
+  // On Native Mobile: delegate to Capacitor Native PDF generator + FileOpener
+  if (Capacitor.isNativePlatform()) {
+    await exportToPdfNative(options);
+    return true;
+  }
   const fullHtml = generateFullReportHtmlDocument(options);
   executeNativePrintOrPreview(fullHtml, options.title);
   return true;

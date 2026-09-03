@@ -24,7 +24,14 @@ import {
 import { Transaction, WalletItem, CashAccountItem, ShopProfile } from '../types';
 import { getTodayFormatted, formatKs } from '../utils/formatters';
 import { PaginationControls } from './PaginationControls';
-import { exportToExcelXlsx, exportToCsvBlob, printFormattedReport, exportReportToPdfAndShare } from '../utils/exportAndPrint';
+import {
+  exportToExcelXlsx,
+  exportToCsvBlob,
+  printFormattedReport,
+  exportReportToPdfAndShare,
+  exportToExcelNative,
+  exportToPdfNative,
+} from '../utils/exportAndPrint';
 
 interface ReportModalProps {
   title: string;
@@ -241,7 +248,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     });
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (filteredData.length === 0) {
       alert('ဒေါင်းလုဒ်ဆွဲရန် ဒေတာ မရှိပါ။');
       return;
@@ -266,7 +273,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       `စာရင်းပေါင်း ${filteredData.length} ခု`,
     ];
 
-    exportToExcelXlsx({
+    await exportToExcelNative({
       filename: `Transaction_Report_${selectedReportDate}_${Date.now()}.xlsx`,
       sheetName: 'Transactions',
       headers: headersList,
@@ -355,7 +362,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         `စာရင်းပေါင်း ${filteredData.length} ခု`,
       ];
 
-      await exportReportToPdfAndShare({
+      await exportToPdfNative({
         title: title || 'အရောင်းအဝယ်နှင့် ကော်မရှင် ရှင်းတမ်း',
         subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
         shopProfile,

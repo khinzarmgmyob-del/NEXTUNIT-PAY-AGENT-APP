@@ -58,6 +58,7 @@ import { MonthlyCashWalletFlowReportModal } from './components/MonthlyCashWallet
 import { PaginationControls } from './components/PaginationControls';
 import { NetworkSettingsModal } from './components/NetworkSettingsModal';
 import { LicenseDashboardModal } from './components/LicenseDashboardModal';
+import { MetallicWaveBackground } from './components/MetallicWaveBackground';
 import { CloudBackupModal } from './components/CloudBackupModal';
 import { BluetoothPrinterModal } from './components/BluetoothPrinterModal';
 import { triggerAutoCloudBackup, subscribeCloudBackup } from './services/cloudBackupService';
@@ -792,8 +793,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased p-2.5 sm:p-4 md:p-6 lg:p-8 flex flex-col justify-start transition-colors duration-200">
-      <div className="w-full max-w-7xl mx-auto space-y-4 md:space-y-6 flex-1 flex flex-col">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased p-2.5 sm:p-4 md:p-6 lg:p-8 flex flex-col justify-start transition-colors duration-200 relative overflow-x-hidden">
+      <MetallicWaveBackground />
+      <div className="w-full max-w-7xl mx-auto space-y-4 md:space-y-6 flex-1 flex flex-col relative z-10">
         {/* TOP HEADER */}
         <header className="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200/80 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 md:gap-4 transition-colors">
           <div className="flex items-center gap-3 md:gap-3.5">
