@@ -4,7 +4,16 @@ import { FileOpener } from '@capacitor-community/file-opener';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import { PrintReportOptions, buildReportHtmlMarkup, downloadBlob, exportReportToPdfAndShare } from './exportAndPrint';
+import {
+  PrintReportOptions,
+  buildReportHtmlMarkup,
+  downloadBlob,
+  exportReportToPdfAndShare,
+  generateFullReportHtmlDocument,
+  executeNativePrintOrPreview,
+} from './exportAndPrint';
+
+import { normalizeMyanmarUnicode } from './unicodeEngine';
 
 /**
  * Result interface for native export operations
@@ -133,9 +142,19 @@ export async function exportToExcelNative({
 
   try {
     const wb = XLSX.utils.book_new();
-    const sheetData: (string | number)[][] = [headers, ...rows];
-    if (summaryRow && summaryRow.length > 0) {
-      sheetData.push(summaryRow);
+
+    // Unicode Engine normalization for Myanmar & English text
+    const cleanHeaders = headers.map((h) => normalizeMyanmarUnicode(h));
+    const cleanRows = rows.map((r) =>
+      r.map((cell) => (typeof cell === 'string' ? normalizeMyanmarUnicode(cell) : cell))
+    );
+    const cleanSummary = summaryRow?.map((cell) =>
+      typeof cell === 'string' ? normalizeMyanmarUnicode(cell) : cell
+    );
+
+    const sheetData: (string | number)[][] = [cleanHeaders, ...cleanRows];
+    if (cleanSummary && cleanSummary.length > 0) {
+      sheetData.push(cleanSummary);
     }
 
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
@@ -191,34 +210,40 @@ export async function exportToPdfNative(
       : `${options.filename}.pdf`
     : `Report_${Date.now()}.pdf`;
 
-  // On Web: use browser print / save as PDF
-  if (!isNative) {
-    await exportReportToPdfAndShare(options);
-    return { success: true, platform: 'web' };
-  }
-
-  // On Mobile Native: Render HTML to canvas and generate PDF
+  // Common PDF generation logic for both Web and Mobile Native
   const reportHtml = buildReportHtmlMarkup(options);
   const container = document.createElement('div');
   container.style.position = 'fixed';
-  container.style.left = '-9999px';
   container.style.top = '0';
-  container.style.width = '794px'; // A4 width standard in px
+  container.style.left = '0';
+  container.style.width = '820px'; // standard A4 render width
+  container.style.zIndex = '-9999';
+  container.style.opacity = '0.01';
+  container.style.pointerEvents = 'none';
   container.style.background = '#ffffff';
   container.style.color = '#000000';
   container.style.padding = '24px';
+  container.style.fontFamily = "'Pyidaungsu', 'Padauk', 'Myanmar3', 'Noto Sans Myanmar', -apple-system, BlinkMacSystemFont, sans-serif";
   container.innerHTML = reportHtml;
   document.body.appendChild(container);
 
   try {
-    const canvas = await html2canvas(container, {
-      scale: 2,
+    // 6-second timeout promise race so it never hangs or leaves the user spinning
+    const canvasPromise = html2canvas(container, {
+      scale: 1.5,
       useCORS: true,
       logging: false,
       backgroundColor: '#ffffff',
+      windowWidth: 1024,
     });
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('PDF Canvas render timed out')), 6000)
+    );
+
+    const canvas = await Promise.race([canvasPromise, timeoutPromise]);
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -241,6 +266,14 @@ export async function exportToPdfNative(
       heightLeft -= pageHeight;
     }
 
+    // If Web Browser: download real PDF directly
+    if (!isNative) {
+      const pdfBlob = pdf.output('blob');
+      downloadBlob(pdfBlob, safeFilename);
+      return { success: true, platform: 'web' };
+    }
+
+    // If Native Mobile: save to filesystem and open with FileOpener
     const dataUri = pdf.output('datauristring');
     const base64Data = dataUri.replace(/^data:application\/pdf;filename=generated\.pdf;base64,/, '').replace(/^data:.*?;base64,/, '');
 
@@ -248,12 +281,20 @@ export async function exportToPdfNative(
       fileName: safeFilename,
       base64Data,
       mimeType: 'application/pdf',
+      fallbackBlob: pdf.output('blob'),
     });
   } catch (err: any) {
-    console.warn('Native PDF canvas generation failed, falling back to print dialog:', err);
-    // Fallback to native print preview
-    await exportReportToPdfAndShare(options);
-    return { success: true, platform: 'native' };
+    console.warn('Fast canvas PDF generation fallback triggered:', err);
+    // Instant Fallback: Native Browser Print / Save as PDF
+    try {
+      const fullHtml = generateFullReportHtmlDocument(options);
+      executeNativePrintOrPreview(fullHtml, options.title);
+      return { success: true, platform: isNative ? 'native' : 'web' };
+    } catch (fallbackErr: any) {
+      console.error('All PDF fallbacks failed:', fallbackErr);
+      alert(`PDF ထုတ်ယူရာတွင် အမှားဖြစ်ပေါ်ပါသည်: ${err?.message || err}`);
+      return { success: false, platform: isNative ? 'native' : 'web', error: err?.message };
+    }
   } finally {
     if (document.body.contains(container)) {
       document.body.removeChild(container);

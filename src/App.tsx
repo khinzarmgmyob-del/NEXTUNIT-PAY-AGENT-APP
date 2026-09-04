@@ -36,6 +36,8 @@ import {
   Moon,
   Database,
   Wifi,
+  FileText,
+  ScanLine,
 } from 'lucide-react';
 import { Transaction, WalletItem, CashAccountItem, BackupData, TransactionType, ShopProfile, NetworkConfig, NetworkMode } from './types';
 import { getDeviceId, generateActivationKey, verifyActivationKey, getAppLicenseStatus, LicenseStatus } from './utils/license';
@@ -61,6 +63,10 @@ import { LicenseDashboardModal } from './components/LicenseDashboardModal';
 import { MetallicWaveBackground } from './components/MetallicWaveBackground';
 import { CloudBackupModal } from './components/CloudBackupModal';
 import { BluetoothPrinterModal } from './components/BluetoothPrinterModal';
+import { PrintPreviewModal } from './components/PrintPreviewModal';
+import { OcrSlipScannerModal } from './components/OcrSlipScannerModal';
+import { exportToPdfNative, exportToExcelNative } from './utils/nativeFileExporter';
+import { PrintReportOptions } from './utils/exportAndPrint';
 import { triggerAutoCloudBackup, subscribeCloudBackup } from './services/cloudBackupService';
 import { getBluetoothConnectionStatus } from './utils/bluetoothPrinter';
 import {
@@ -193,6 +199,13 @@ export default function App() {
   const [showLicenseModal, setShowLicenseModal] = useState<boolean>(false);
   const [showCloudBackupModal, setShowCloudBackupModal] = useState<boolean>(false);
   const [showBluetoothModal, setShowBluetoothModal] = useState<boolean>(false);
+
+  // Bottom Transaction Ledger Export & Print & OCR States
+  const [showLedgerPrintPreview, setShowLedgerPrintPreview] = useState<boolean>(false);
+  const [ledgerReportOptions, setLedgerReportOptions] = useState<PrintReportOptions | null>(null);
+  const [showLedgerOcrScanner, setShowLedgerOcrScanner] = useState<boolean>(false);
+  const [isLedgerExportingPdf, setIsLedgerExportingPdf] = useState<boolean>(false);
+  const [isLedgerExportingExcel, setIsLedgerExportingExcel] = useState<boolean>(false);
 
   // License & 3-Day Trial State
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus>(() => getAppLicenseStatus());
@@ -447,6 +460,224 @@ export default function App() {
 
       return matchDate && matchWallet && matchCash;
     });
+  };
+
+  // Prepare ledger export data for PDF, Excel, and Print Preview
+  const prepareLedgerExportData = async () => {
+    let dataset: Transaction[] = [];
+    try {
+      dataset = await getAllFilteredTransactions({
+        dateFilter: mainDateFilter,
+        walletFilter: mainWalletFilter,
+        cashFilter: mainCashFilter,
+        typeFilter: mainTypeFilter,
+        searchQuery: mainSearchQuery,
+        todayDate: todayStr,
+      });
+    } catch (e) {
+      console.warn('Fallback to paged transactions for ledger export:', e);
+    }
+
+    if (!dataset || dataset.length === 0) {
+      dataset = pagedTransactions;
+    }
+
+    const headersList = [
+      'စဉ် (No.)',
+      'နေ့စွဲ (Date)',
+      'အချိန် (Time)',
+      'ဖောက်သည်အမည် (Customer)',
+      'အမျိုးအစား (Type)',
+      'လက်ငင်းပေး/ရငွေ (Actual Ks)',
+      'မူလလွှဲငွေ (Original Ks)',
+      'ငွေသားကော်မရှင် (Cash Comm)',
+      'Walletကော်မရှင် (Wallet Comm)',
+      'စုစုပေါင်းကော်မရှင် (Total Comm)',
+      'ကော်မရှင်ပုံစံ (Mode)',
+      'ဖုန်း (Phone)',
+      'Wallet/လွှဲထုတ် (Wallet)',
+      'လက်ခံWallet (Target)',
+      'ငွေသားအကောင့် (Cash Box)',
+      'OCR/ပြေစာအမှတ် (Voucher Ref)',
+      'မှတ်ချက် (Notes)',
+    ];
+
+    let sumCashComm = 0;
+    let sumWalletComm = 0;
+    let sumIn = 0;
+    let sumOut = 0;
+    let sumTransfer = 0;
+    let sumNet = 0;
+
+    const rows = dataset.map((item, index) => {
+      const isCashOut = item.type === 'ထုတ်';
+      const isTransfer = item.type === 'လွှဲပြောင်း';
+      const isCashIn = item.type === 'သွင်း';
+
+      const actualCash = isTransfer
+        ? item.amount
+        : isCashOut
+        ? item.netPayout !== undefined
+          ? item.netPayout
+          : item.commissionMode === 'deduct'
+          ? item.amount - item.commission
+          : item.amount
+        : item.amount;
+
+      let cComm = 0;
+      let wComm = 0;
+      if (isTransfer) {
+        if (item.commissionChannel === 'Wallet') wComm = item.commission;
+        else cComm = item.commission;
+        sumTransfer += item.amount;
+      } else if (isCashIn) {
+        cComm = item.commission;
+        sumIn += actualCash;
+        sumNet += actualCash;
+      } else {
+        if (item.commissionMode === 'deduct') {
+          wComm = item.commission;
+        } else {
+          cComm = item.commission;
+        }
+        sumOut += actualCash;
+        sumNet -= actualCash;
+      }
+
+      sumCashComm += cComm;
+      sumWalletComm += wComm;
+
+      return [
+        index + 1,
+        item.date,
+        item.time || '-',
+        item.customerName,
+        item.type,
+        `${actualCash.toLocaleString()} Ks`,
+        `${item.amount.toLocaleString()} Ks`,
+        cComm > 0 ? `+${cComm.toLocaleString()} Ks` : '-',
+        wComm > 0 ? `+${wComm.toLocaleString()} Ks` : '-',
+        `+${(cComm + wComm).toLocaleString()} Ks`,
+        item.commissionMode === 'deduct' ? 'မူလငွေမှနုတ်' : 'သီးသန့်ပေး',
+        item.phone || '-',
+        item.walletName,
+        item.targetWalletName || '-',
+        item.cashAccountName || '-',
+        item.ocrRef || `TXN-${item.id}`,
+        item.note || '-',
+      ];
+    });
+
+    const summaryRow = [
+      'စုစုပေါင်း Total',
+      '',
+      '',
+      '',
+      '',
+      `${sumNet >= 0 ? '+' : '-'}${Math.abs(sumNet).toLocaleString()} Ks`,
+      `${(sumIn + sumOut + sumTransfer).toLocaleString()} Ks`,
+      `+${sumCashComm.toLocaleString()} Ks`,
+      `+${sumWalletComm.toLocaleString()} Ks`,
+      `+${(sumCashComm + sumWalletComm).toLocaleString()} Ks`,
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      `စာရင်းပေါင်း ${dataset.length} ခု`,
+    ];
+
+    const title = 'အရောင်းအဝယ် စာရင်းမှတ်တမ်းများ (Transactions Ledger)';
+    const subtitle = `ရက်စွဲ: ${mainDateFilter === 'ALL' ? 'ရက်စွဲအားလုံး' : mainDateFilter === 'TODAY' ? todayStr : mainDateFilter} • စုစုပေါင်း: ${dataset.length} ခု`;
+
+    return {
+      dataset,
+      headersList,
+      rows,
+      summaryRow,
+      title,
+      subtitle,
+      summaryCards: [
+        { label: 'ငွေသွင်း (Cash In)', value: `+${formatKs(sumIn)} Ks`, note: 'လက်ငင်းငွေသားဝင်' },
+        { label: 'ငွေထုတ် (Cash Out)', value: `-${formatKs(sumOut)} Ks`, note: 'လက်ငင်းငွေသားထုတ်' },
+        { label: 'ကော်မရှင်စုစုပေါင်း', value: `+${formatKs(sumCashComm + sumWalletComm)} Ks`, note: `Cash:${formatKs(sumCashComm)} | W:${formatKs(sumWalletComm)}` },
+        { label: 'စာရင်း အရေအတွက်', value: `${dataset.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(sumTransfer)} Ks` },
+      ],
+    };
+  };
+
+  // Direct Page Setup & Print Preview for Ledger
+  const handleLedgerPrint = async () => {
+    try {
+      const data = await prepareLedgerExportData();
+      if (data.dataset.length === 0) {
+        showToast('ပရင့်ထုတ်ရန် ဒေတာ မရှိပါ။', 'info');
+        return;
+      }
+      setLedgerReportOptions({
+        title: data.title,
+        subtitle: data.subtitle,
+        shopProfile,
+        summaryCards: data.summaryCards,
+        tableHeaders: data.headersList,
+        tableRows: data.rows,
+        summaryRow: data.summaryRow,
+        filename: `Transactions_Ledger_${todayStr}_${Date.now()}.pdf`,
+      });
+      setShowLedgerPrintPreview(true);
+    } catch (e: any) {
+      showToast(`ပရင့် ပြင်ဆင်ရာတွင် အမှား: ${e?.message || e}`, 'error');
+    }
+  };
+
+  // Direct PDF Export & Native Share for Ledger
+  const handleLedgerExportPdf = async () => {
+    setIsLedgerExportingPdf(true);
+    try {
+      const data = await prepareLedgerExportData();
+      if (data.dataset.length === 0) {
+        showToast('PDF ထုတ်ရန် ဒေတာ မရှိပါ။', 'info');
+        return;
+      }
+      await exportToPdfNative({
+        title: data.title,
+        subtitle: data.subtitle,
+        shopProfile,
+        summaryCards: data.summaryCards,
+        tableHeaders: data.headersList,
+        tableRows: data.rows,
+        summaryRow: data.summaryRow,
+        filename: `Transactions_Ledger_${todayStr}_${Date.now()}.pdf`,
+      });
+    } catch (e: any) {
+      showToast(`PDF ထုတ်ယူရာတွင် အမှား: ${e?.message || e}`, 'error');
+    } finally {
+      setIsLedgerExportingPdf(false);
+    }
+  };
+
+  // Direct Excel (.xlsx) Export for Ledger with Myanmar Unicode
+  const handleLedgerExportExcel = async () => {
+    setIsLedgerExportingExcel(true);
+    try {
+      const data = await prepareLedgerExportData();
+      if (data.dataset.length === 0) {
+        showToast('Excel ထုတ်ရန် ဒေတာ မရှိပါ။', 'info');
+        return;
+      }
+      await exportToExcelNative({
+        filename: `Transactions_Ledger_${todayStr}_${Date.now()}.xlsx`,
+        sheetName: 'Ledger',
+        headers: data.headersList,
+        rows: data.rows,
+        summaryRow: data.summaryRow,
+      });
+    } catch (e: any) {
+      showToast(`Excel ထုတ်ယူရာတွင် အမှား: ${e?.message || e}`, 'error');
+    } finally {
+      setIsLedgerExportingExcel(false);
+    }
   };
 
   // Transaction Save Handler with Double-Entry Balance Updates & SQLite Insert
@@ -1205,7 +1436,58 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              {/* Export PDF & Share */}
+              <button
+                onClick={handleLedgerExportPdf}
+                disabled={isLedgerExportingPdf}
+                className="p-1.5 sm:px-2.5 sm:py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                title="PDF ဖိုင်အဖြစ် ထုတ်ယူပြီး ဖုန်းထဲသိမ်းဆည်း / Share လုပ်မည်"
+              >
+                {isLedgerExportingPdf ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <FileText className="w-3.5 h-3.5" />
+                )}
+                <span className="hidden sm:inline">Export PDF</span>
+                <Share2 className="w-3 h-3 opacity-80 hidden md:inline" />
+              </button>
+
+              {/* Excel (.xlsx) */}
+              <button
+                onClick={handleLedgerExportExcel}
+                disabled={isLedgerExportingExcel}
+                className="p-1.5 sm:px-2.5 sm:py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                title="Excel (.xlsx) Unicode ဖြင့် ထုတ်ယူမည်"
+              >
+                {isLedgerExportingExcel ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                ) : (
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                )}
+                <span className="hidden sm:inline">Excel</span>
+              </button>
+
+              {/* Print (Page Setup) */}
+              <button
+                onClick={handleLedgerPrint}
+                className="p-1.5 sm:px-2.5 sm:py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                title="ပရင့်ထုတ်ရန် Page Setup ဖွင့်မည်"
+              >
+                <Printer className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span className="hidden sm:inline">Print</span>
+              </button>
+
+              {/* OCR Slip Scanner */}
+              <button
+                onClick={() => setShowLedgerOcrScanner(true)}
+                className="p-1.5 sm:px-2.5 sm:py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                title="OCR Slip Voucher Scanner"
+              >
+                <ScanLine className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <span className="hidden md:inline">OCR Slip</span>
+              </button>
+
               {/* View Switcher: Card vs Table */}
               <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700">
                 <button
@@ -1537,13 +1819,14 @@ export default function App() {
                       <th className="p-2.5 whitespace-nowrap min-w-[110px]">ဖုန်းနံပါတ်</th>
                       <th className="p-2.5 whitespace-nowrap min-w-[130px]">Wallet အကောက်</th>
                       <th className="p-2.5 whitespace-nowrap min-w-[120px]">ငွေသားအကောက်</th>
+                      <th className="p-2.5 whitespace-nowrap min-w-[105px]">OCR/Ref</th>
                       <th className="p-2.5 text-center whitespace-nowrap min-w-[80px]">ပြေစာ</th>
                     </tr>
                   </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                   {pagedTransactions.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="p-6 text-center text-slate-400 dark:text-slate-500 font-medium">
+                      <td colSpan={12} className="p-6 text-center text-slate-400 dark:text-slate-500 font-medium">
                         ရွေးချယ်ထားသော စံနှုန်းများနှင့် ကိုက်ညီသော ဒေတာ မရှိပါ။
                       </td>
                     </tr>
@@ -1631,6 +1914,11 @@ export default function App() {
                           <td className="p-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">
                             <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded font-semibold text-[11px]">
                               {item.cashAccountName || 'ဆိုင်ရှေ့ငွေပုံး'}
+                            </span>
+                          </td>
+                          <td className="p-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded font-mono text-[11px]">
+                              {item.ocrRef || `TXN-${item.id}`}
                             </span>
                           </td>
                           <td className="p-3 text-center whitespace-nowrap">
@@ -2117,6 +2405,29 @@ export default function App() {
           }}
           shopProfile={shopProfile}
           onShowToast={showToast}
+        />
+      )}
+
+      {/* 19. Bottom Transaction Ledger Print Preview Modal */}
+      {showLedgerPrintPreview && ledgerReportOptions && (
+        <PrintPreviewModal
+          isOpen={showLedgerPrintPreview}
+          onClose={() => setShowLedgerPrintPreview(false)}
+          reportOptions={ledgerReportOptions}
+        />
+      )}
+
+      {/* 20. Bottom Transaction Ledger OCR Slip Scanner Modal */}
+      {showLedgerOcrScanner && (
+        <OcrSlipScannerModal
+          isOpen={showLedgerOcrScanner}
+          onClose={() => setShowLedgerOcrScanner(false)}
+          onApplyTransaction={(data) => {
+            showToast(
+              `OCR Slip အချက်အလက်များ ဖတ်ရှုပြီးပါပြီ: ${data.amount ? formatKs(data.amount) + ' Ks' : ''} ${data.txnId ? `(Ref: ${data.txnId})` : ''}`,
+              'success'
+            );
+          }}
         />
       )}
     </div>

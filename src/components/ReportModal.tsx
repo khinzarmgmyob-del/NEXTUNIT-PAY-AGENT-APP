@@ -20,6 +20,7 @@ import {
   FileText,
   Share2,
   Loader2,
+  ScanLine,
 } from 'lucide-react';
 import { Transaction, WalletItem, CashAccountItem, ShopProfile } from '../types';
 import { getTodayFormatted, formatKs } from '../utils/formatters';
@@ -29,9 +30,10 @@ import {
   exportToCsvBlob,
   printFormattedReport,
   exportReportToPdfAndShare,
-  exportToExcelNative,
-  exportToPdfNative,
 } from '../utils/exportAndPrint';
+import { exportToExcelNative, exportToPdfNative } from '../utils/nativeFileExporter';
+import { PrintPreviewModal } from './PrintPreviewModal';
+import { OcrSlipScannerModal } from './OcrSlipScannerModal';
 
 interface ReportModalProps {
   title: string;
@@ -183,22 +185,23 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const grandTotalComm = totalCashComm + totalWalletComm;
 
   const headersList = [
-    'စဉ်',
-    'နေ့စွဲ',
-    'အချိန်',
-    'ဖောက်သည်အမည်',
-    'အမျိုးအစား',
-    'လက်ငင်းပေး/ရငွေ(Ks)',
-    'မူလလွှဲငွေ(Ks)',
-    'လက်ငင်းကော်မရှင်(Ks)',
-    'Walletကော်မရှင်(Ks)',
-    'ကော်မရှင်စုစုပေါင်း(Ks)',
-    'ကော်မရှင်ပုံစံ',
-    'ဖုန်း',
-    'Wallet/လွှဲထုတ်',
-    'လက်ခံWallet',
-    'ငွေသားအကောင့်',
-    'မှတ်ချက်',
+    'စဉ် (No.)',
+    'နေ့စွဲ (Date)',
+    'အချိန် (Time)',
+    'ဖောက်သည်အမည် (Customer)',
+    'အမျိုးအစား (Type)',
+    'လက်ငင်းပေး/ရငွေ (Actual Ks)',
+    'မူလလွှဲငွေ (Original Ks)',
+    'ငွေသားကော်မရှင် (Cash Comm)',
+    'Walletကော်မရှင် (Wallet Comm)',
+    'စုစုပေါင်းကော်မရှင် (Total Comm)',
+    'ကော်မရှင်ပုံစံ (Mode)',
+    'ဖုန်း (Phone)',
+    'Wallet/လွှဲထုတ် (Wallet)',
+    'လက်ခံWallet (Target)',
+    'ငွေသားအကောင့် (Cash Box)',
+    'OCR/ပြေစာအမှတ် (Ref)',
+    'မှတ်ချက် (Notes)',
   ];
 
   const getReportRows = () => {
@@ -243,6 +246,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         d.walletName,
         d.targetWalletName || '-',
         d.cashAccountName || '-',
+        d.ocrRef || `TXN-${d.id}`,
         d.note || '-',
       ];
     });
@@ -295,41 +299,15 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     });
   };
 
-  const handlePrint = () => {
-    const rows = getReportRows();
-    const summaryRow = [
-      'စုစုပေါင်း Total',
-      '',
-      '',
-      '',
-      '',
-      `${netAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netAmount))} Ks`,
-      `${netOriginalAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netOriginalAmount))} Ks`,
-      `+${formatKs(totalCashComm)} Ks`,
-      `+${formatKs(totalWalletComm)} Ks`,
-      `+${formatKs(grandTotalComm)} Ks`,
-      '',
-      '',
-      '',
-      '',
-      '',
-      `စာရင်းပေါင်း ${filteredData.length} ခု`,
-    ];
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [showOcrModal, setShowOcrModal] = useState(false);
 
-    printFormattedReport({
-      title: title || 'အရောင်းအဝယ်နှင့် ကော်မရှင် ရှင်းတမ်း',
-      subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
-      shopProfile,
-      summaryCards: [
-        { label: 'ငွေသွင်း (Cash In)', value: `+${formatKs(totalIn)} Ks`, note: 'လက်ငင်းငွေသားဝင်' },
-        { label: 'ငွေထုတ် (Cash Out)', value: `-${formatKs(totalOut)} Ks`, note: 'လက်ငင်းငွေသားထုတ်' },
-        { label: 'ကော်မရှင်ရငွေ', value: `+${formatKs(grandTotalComm)} Ks`, note: `Cash:${formatKs(totalCashComm)} | W:${formatKs(totalWalletComm)}` },
-        { label: 'စာရင်း အရေအတွက်', value: `${filteredData.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(totalTransferVolume)} Ks` },
-      ],
-      tableHeaders: headersList,
-      tableRows: rows,
-      summaryRow,
-    });
+  const handlePrint = () => {
+    if (filteredData.length === 0) {
+      alert('ပရင့်ထုတ်ရန် ဒေတာ မရှိပါ။');
+      return;
+    }
+    setShowPrintPreview(true);
   };
 
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -359,6 +337,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         '',
         '',
         '',
+        '',
         `စာရင်းပေါင်း ${filteredData.length} ခု`,
       ];
 
@@ -377,9 +356,9 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         summaryRow,
         filename: `Report_${selectedReportDate}_${Date.now()}.pdf`,
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('PDF export error:', err);
-      alert('PDF ထုတ်ယူရာတွင် အမှားတစ်ခု ဖြစ်ပေါ်ခဲ့ပါသည်။');
+      alert(`PDF ထုတ်ယူရာတွင် အမှားတစ်ခု ဖြစ်ပေါ်ခဲ့ပါသည်: ${err?.message || err}`);
     } finally {
       setIsExportingPdf(false);
     }
@@ -469,11 +448,21 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               <span className="hidden sm:inline">Excel</span>
             </button>
 
+            {/* OCR Slip Scanner */}
+            <button
+              onClick={() => setShowOcrModal(true)}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+              title="OCR ဘောက်ချာ/Slip ဖတ်ရန်"
+            >
+              <ScanLine className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span className="hidden sm:inline">OCR Slip</span>
+            </button>
+
             {/* Print */}
             <button
               onClick={handlePrint}
               className="p-1.5 sm:px-2.5 sm:py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-              title="Print ထုတ်မည်"
+              title="Print ထုတ်မည် (Page Setup)"
             >
               <Printer className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Print</span>
@@ -837,13 +826,14 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                       </th>
                       <th className="p-2.5 whitespace-nowrap min-w-[130px]">Wallet အကောင့်</th>
                       <th className="p-2.5 whitespace-nowrap min-w-[120px]">ငွေသား အကောင့်</th>
+                      <th className="p-2.5 whitespace-nowrap min-w-[110px]">OCR/Slip Ref</th>
                       <th className="p-2.5 text-center whitespace-nowrap min-w-[90px]">လုပ်ဆောင်ချက်</th>
                     </tr>
                   </thead>
                 <tbody className="divide-y divide-slate-200">
                   {filteredData.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="p-6 text-center text-slate-400 font-medium">
+                      <td colSpan={12} className="p-6 text-center text-slate-400 font-medium">
                         ရွေးချယ်ထားသော စံနှုန်းများနှင့် ကိုက်ညီသော ဒေတာ မရှိပါ။
                       </td>
                     </tr>
@@ -941,6 +931,12 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                             </span>
                           </td>
 
+                          <td className="p-2.5 text-slate-700 whitespace-nowrap">
+                            <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded font-mono text-[10px]">
+                              {item.ocrRef || `TXN-${item.id}`}
+                            </span>
+                          </td>
+
                           <td className="p-2.5 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1">
                               {onViewReceipt && (
@@ -1029,6 +1025,60 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Print Preview & Page Setup Modal */}
+      {showPrintPreview && (
+        <PrintPreviewModal
+          isOpen={showPrintPreview}
+          onClose={() => setShowPrintPreview(false)}
+          reportOptions={{
+            title: title || 'အရောင်းအဝယ်နှင့် ကော်မရှင် ရှင်းတမ်း',
+            subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
+            shopProfile,
+            summaryCards: [
+              { label: 'ငွေသွင်း (Cash In)', value: `+${formatKs(totalIn)} Ks`, note: 'လက်ငင်းငွေသားဝင်' },
+              { label: 'ငွေထုတ် (Cash Out)', value: `-${formatKs(totalOut)} Ks`, note: 'လက်ငင်းငွေသားထုတ်' },
+              { label: 'ကော်မရှင်ရငွေ', value: `+${formatKs(grandTotalComm)} Ks`, note: `Cash:${formatKs(totalCashComm)} | W:${formatKs(totalWalletComm)}` },
+              { label: 'စာရင်း အရေအတွက်', value: `${filteredData.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(totalTransferVolume)} Ks` },
+            ],
+            tableHeaders: headersList,
+            tableRows: getReportRows(),
+            summaryRow: [
+              'စုစုပေါင်း Total',
+              '',
+              '',
+              '',
+              '',
+              `${netAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netAmount))} Ks`,
+              `${netOriginalAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netOriginalAmount))} Ks`,
+              `+${formatKs(totalCashComm)} Ks`,
+              `+${formatKs(totalWalletComm)} Ks`,
+              `+${formatKs(grandTotalComm)} Ks`,
+              '',
+              '',
+              '',
+              '',
+              '',
+              '',
+              `စာရင်းပေါင်း ${filteredData.length} ခု`,
+            ],
+            filename: `Transaction_Report_${selectedReportDate}_${Date.now()}.pdf`,
+          }}
+        />
+      )}
+
+      {/* OCR Slip Scanner Modal */}
+      {showOcrModal && (
+        <OcrSlipScannerModal
+          isOpen={showOcrModal}
+          onClose={() => setShowOcrModal(false)}
+          onApplyTransaction={(data) => {
+            alert(
+              `OCR Slip အချက်အလက်များ ဖတ်ရှုပြီးပါပြီ:\nငွေပမာဏ: ${data.amount || ''} Ks\nRef: ${data.txnId || ''}\nဖုန်း: ${data.phone || ''}`
+            );
+          }}
+        />
+      )}
     </div>
   );
 };

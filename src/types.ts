@@ -44,6 +44,7 @@ export interface Transaction {
   targetWalletName?: string; // e.g. WaveMoney, CB Pay (လက်ခံမည့် Wallet - for 'လွှဲပြောင်း')
   cashAccountName?: string; // e.g. ဆိုင်ရှေ့ငွေပုံး, ကာတာငွေသေတ္တာ
   accountType?: 'Wallet' | 'Cash';
+  ocrRef?: string; // OCR ဘောက်ချာ / Txn ID
   note?: string;
 }
 
