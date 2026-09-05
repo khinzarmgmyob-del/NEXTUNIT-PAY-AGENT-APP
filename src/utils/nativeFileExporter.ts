@@ -50,7 +50,7 @@ export async function saveAndOpenFileNative({
   // Web fallback: download directly in browser
   if (!isNative) {
     if (fallbackBlob) {
-      downloadBlob(fallbackBlob, fileName);
+      await downloadBlob(fallbackBlob, fileName);
       return { success: true, platform: 'web' };
     }
     // Convert base64 to blob if fallbackBlob not provided
@@ -62,7 +62,7 @@ export async function saveAndOpenFileNative({
       }
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], { type: mimeType });
-      downloadBlob(blob, fileName);
+      await downloadBlob(blob, fileName);
       return { success: true, platform: 'web' };
     } catch (e: any) {
       console.error('Web download error:', e);
@@ -269,7 +269,7 @@ export async function exportToPdfNative(
     // If Web Browser: download real PDF directly
     if (!isNative) {
       const pdfBlob = pdf.output('blob');
-      downloadBlob(pdfBlob, safeFilename);
+      await downloadBlob(pdfBlob, safeFilename);
       return { success: true, platform: 'web' };
     }
 

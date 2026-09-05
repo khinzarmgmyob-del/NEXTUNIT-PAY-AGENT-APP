@@ -118,10 +118,68 @@ export function exportToCsvBlob({
 }
 
 /**
- * Helper to download Blob safely across all browsers, iframes & WebViews
+ * Helper to download Blob safely across all browsers, iframes, mobile & tablet devices
+ * Supports mobile Web Share API for native "Save to Files" (Save As) on iOS & Android
  */
-export function downloadBlob(blob: Blob, filename: string) {
+export async function downloadBlob(blob: Blob, filename: string): Promise<boolean> {
   try {
+    const isMobileOrTablet =
+      typeof navigator !== 'undefined' &&
+      (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+        (typeof window !== 'undefined' && 'ontouchstart' in window && navigator.maxTouchPoints > 0));
+
+    // 1. Mobile & Tablet Web Share (Save to Files / Save As on iOS & Android)
+    if (
+      isMobileOrTablet &&
+      typeof navigator !== 'undefined' &&
+      typeof (navigator as any).share === 'function' &&
+      typeof (navigator as any).canShare === 'function'
+    ) {
+      try {
+        const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+        if ((navigator as any).canShare({ files: [file] })) {
+          await (navigator as any).share({
+            files: [file],
+            title: filename,
+            text: `${filename} ဖိုင်အား သိမ်းဆည်းရန် သို့မဟုတ် Share ပြုလုပ်ရန်`,
+          });
+          return true;
+        }
+      } catch (shareErr: any) {
+        if (shareErr?.name === 'AbortError') {
+          return true; // User dismissed share/save dialog
+        }
+        console.warn('Mobile Web Share fallback to direct download:', shareErr);
+      }
+    }
+
+    // 2. File System Access API (Desktop / Chromium Tablet "Save As" Picker)
+    if (!isMobileOrTablet && typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+      try {
+        const extension = filename.split('.').pop() || '';
+        const mimeType = blob.type || 'application/octet-stream';
+        const fileHandle = await (window as any).showSaveFilePicker({
+          suggestedName: filename,
+          types: [
+            {
+              description: 'Exported File',
+              accept: { [mimeType]: [`.${extension}`] },
+            },
+          ],
+        });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return true;
+      } catch (pickerErr: any) {
+        if (pickerErr?.name === 'AbortError') {
+          return true;
+        }
+        console.warn('showSaveFilePicker fallback to download anchor:', pickerErr);
+      }
+    }
+
+    // 3. Universal standard anchor download
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -133,7 +191,6 @@ export function downloadBlob(blob: Blob, filename: string) {
     link.style.opacity = '0';
     document.body.appendChild(link);
     
-    // Trigger download
     link.click();
 
     setTimeout(() => {
@@ -141,9 +198,12 @@ export function downloadBlob(blob: Blob, filename: string) {
         document.body.removeChild(link);
       }
       window.URL.revokeObjectURL(url);
-    }, 2500);
+    }, 4000);
+
+    return true;
   } catch (e) {
     console.error('downloadBlob error:', e);
+    return false;
   }
 }
 

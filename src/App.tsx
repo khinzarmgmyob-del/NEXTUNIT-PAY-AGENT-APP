@@ -1441,7 +1441,7 @@ export default function App() {
               <button
                 onClick={handleLedgerExportPdf}
                 disabled={isLedgerExportingPdf}
-                className="p-1.5 sm:px-2.5 sm:py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                className="px-2 py-1.5 sm:px-2.5 sm:py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1 sm:gap-1.5"
                 title="PDF ဖိုင်အဖြစ် ထုတ်ယူပြီး ဖုန်းထဲသိမ်းဆည်း / Share လုပ်မည်"
               >
                 {isLedgerExportingPdf ? (
@@ -1449,6 +1449,7 @@ export default function App() {
                 ) : (
                   <FileText className="w-3.5 h-3.5" />
                 )}
+                <span className="inline sm:hidden">PDF</span>
                 <span className="hidden sm:inline">Export PDF</span>
                 <Share2 className="w-3 h-3 opacity-80 hidden md:inline" />
               </button>
@@ -1457,7 +1458,7 @@ export default function App() {
               <button
                 onClick={handleLedgerExportExcel}
                 disabled={isLedgerExportingExcel}
-                className="p-1.5 sm:px-2.5 sm:py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                className="px-2 py-1.5 sm:px-2.5 sm:py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 sm:gap-1.5 disabled:opacity-50"
                 title="Excel (.xlsx) Unicode ဖြင့် ထုတ်ယူမည်"
               >
                 {isLedgerExportingExcel ? (
@@ -1465,26 +1466,27 @@ export default function App() {
                 ) : (
                   <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                 )}
-                <span className="hidden sm:inline">Excel</span>
+                <span>Excel</span>
               </button>
 
               {/* Print (Page Setup) */}
               <button
                 onClick={handleLedgerPrint}
-                className="p-1.5 sm:px-2.5 sm:py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                className="px-2 py-1.5 sm:px-2.5 sm:py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 sm:gap-1.5"
                 title="ပရင့်ထုတ်ရန် Page Setup ဖွင့်မည်"
               >
                 <Printer className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span className="hidden sm:inline">Print</span>
+                <span>Print</span>
               </button>
 
               {/* OCR Slip Scanner */}
               <button
                 onClick={() => setShowLedgerOcrScanner(true)}
-                className="p-1.5 sm:px-2.5 sm:py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                className="px-2 py-1.5 sm:px-2.5 sm:py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 sm:gap-1.5"
                 title="OCR Slip Voucher Scanner"
               >
                 <ScanLine className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <span className="inline md:hidden">OCR</span>
                 <span className="hidden md:inline">OCR Slip</span>
               </button>
 
@@ -1985,100 +1987,106 @@ export default function App() {
         </div>
 
         {/* DATA MAINTENANCE, ARCHIVE & BACKUP / RESTORE FOOTER CARD */}
-        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4 transition-colors">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3 transition-colors">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2.5">
             <div>
-              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                💾 SQLite Data စနစ်၊ Database Indexing၊ Archive နှင့် Backup / Restore
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                💾 စနစ်ထိန်းသိမ်းမှု၊ အစီရင်ခံစာနှင့် Backup / Restore စနစ်
               </h4>
-              <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">
-                Transaction သန်းချီအတွက် SQLite Database Indexing နှင့် 30-Row Pagination စနစ် ထည့်သွင်းထားပြီး JSON Backup များကို ဖုန်းထဲသို့ သို့မဟုတ် Drive/Telegram သို့ Share သိမ်းဆည်းနိုင်ပါသည်။
+              <p className="text-[11px] text-slate-400 dark:text-slate-400 mt-0.5">
+                Reconcile ရှင်းတမ်းများ၊ လချုပ် Flow၊ စာရင်းဟောင်း Archive နှင့် Backup/Restore များကို တနေရာတည်းတွင် ဆောင်ရွက်နိုင်ပါသည်
               </p>
-            </div>
-
-            {/* Report & Maintenance Action Buttons */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => {
-                  setSelectedReportDate(todayStr);
-                  setShowCashReconcileReport(true);
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
-                title="ငွေသားအကောက်များ၏ ဝင်ငွေ/ထွက်ငွေ နှင့် Net Amount အသေးစိတ် ရှင်းတမ်း"
-              >
-                <Banknote className="w-4 h-4" />
-                💵 လက်ငင်းငွေသား Reconcile
-              </button>
-
-              <button
-                onClick={() => {
-                  setSelectedReportDate(todayStr);
-                  setShowWalletReconcileReport(true);
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
-                title="Wallet များ၏ ဝင်ငွေ/ထွက်ငွေ နှင့် Net Amount အသေးစိတ် ရှင်းတမ်း"
-              >
-                <Wallet className="w-4 h-4" />
-                🏦 Wallet Reconcile
-              </button>
-
-              <button
-                onClick={() => setShowMonthlyFlowReport(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-600/20 cursor-pointer"
-                title="SUMMARY OF MONTHLY CASH FLOW STATEMENT - တစ်လချင်းစီ၏ ရက်အလိုက် ငွေသား နှင့် Wallet ဝင်/ထွက် ရှင်းတမ်း"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                📊 Monthly Cash and Wallet Flow Report
-              </button>
-
-              <button
-                onClick={() => setShowArchiveModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-600/20 cursor-pointer"
-                title="လွန်ခဲ့သော ၆ လ/၁ နှစ် စာရင်းဟောင်းများကို ခွဲထုတ်သိမ်းဆည်းပြီး Database ကို Compact ရှင်းလင်းမည်"
-              >
-                <Archive className="w-4 h-4" />
-                🗄️ စာရင်းဟောင်း Archive &amp; Compact
-              </button>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* UNIFIED COMPACT TOOLBAR: 1 ROW ON DESKTOP (LG:GRID-COLS-8), 4 COLS ON TABLET, 2 COLS ON MOBILE */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 sm:gap-2">
+            {/* 1. Cash Reconcile */}
+            <button
+              onClick={() => {
+                setSelectedReportDate(todayStr);
+                setShowCashReconcileReport(true);
+              }}
+              className="flex items-center justify-center gap-1.5 px-2 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-2xs cursor-pointer min-h-[40px] whitespace-nowrap"
+              title="ငွေသားအကောင့်များ၏ ဝင်ငွေ/ထွက်ငွေ နှင့် Net Amount အသေးစိတ် ရှင်းတမ်း"
+            >
+              <Banknote className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Cash Reconcile</span>
+            </button>
+
+            {/* 2. Wallet Reconcile */}
+            <button
+              onClick={() => {
+                setSelectedReportDate(todayStr);
+                setShowWalletReconcileReport(true);
+              }}
+              className="flex items-center justify-center gap-1.5 px-2 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-2xs cursor-pointer min-h-[40px] whitespace-nowrap"
+              title="Wallet များ၏ ဝင်ငွေ/ထွက်ငွေ နှင့် Net Amount အသေးစိတ် ရှင်းတမ်း"
+            >
+              <Wallet className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span>Wallet Reconcile</span>
+            </button>
+
+            {/* 3. Monthly Flow */}
+            <button
+              onClick={() => setShowMonthlyFlowReport(true)}
+              className="flex items-center justify-center gap-1.5 px-2 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-2xs cursor-pointer min-h-[40px] whitespace-nowrap"
+              title="SUMMARY OF MONTHLY CASH FLOW STATEMENT - တစ်လချင်းစီ၏ ရက်အလိုက် ငွေသား နှင့် Wallet ဝင်/ထွက် ရှင်းတမ်း"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+              <span>Monthly Flow</span>
+            </button>
+
+            {/* 4. Archive */}
+            <button
+              onClick={() => setShowArchiveModal(true)}
+              className="flex items-center justify-center gap-1.5 px-2 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-2xs cursor-pointer min-h-[40px] whitespace-nowrap"
+              title="လွန်ခဲ့သော ၆ လ/၁ နှစ် စာရင်းဟောင်းများကို ခွဲထုတ်သိမ်းဆည်းပြီး Database ကို Compact ရှင်းလင်းမည်"
+            >
+              <Archive className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>Archive</span>
+            </button>
+
+            {/* 5. Full Backup */}
             <button
               onClick={() => handleBackup(false)}
               disabled={isExporting}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
-              title="JSON Backup ဖိုင်ကို ဖုန်းထဲသို့ ဒေါင်းလုဒ်/သိမ်းဆည်းမည်"
+              className="flex items-center justify-center gap-1.5 px-2 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-2xs cursor-pointer min-h-[40px] whitespace-nowrap disabled:opacity-50"
+              title="JSON Backup ဖိုင်ကို ဒေါင်းလုဒ်/သိမ်းဆည်းမည်"
             >
-              {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              📥 Full Backup (JSON)
+              {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600 shrink-0" /> : <Download className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />}
+              <span>Backup</span>
             </button>
 
+            {/* 6. Share Backup */}
             <button
               onClick={() => handleBackup(true)}
               disabled={isExporting}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-violet-600/20 cursor-pointer"
-              title="@capacitor/share ဖြင့် Drive, Telegram, Viber, Files သို့ တိုက်ရိုက် Share လုပ်မည်"
+              className="flex items-center justify-center gap-1.5 px-2 py-2.5 bg-violet-50 hover:bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300 dark:hover:bg-violet-900/60 border border-violet-200 dark:border-violet-800 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-2xs cursor-pointer min-h-[40px] whitespace-nowrap disabled:opacity-50"
+              title="Drive, Telegram, Viber, Files သို့ တိုက်ရိုက် Share လုပ်မည်"
             >
-              {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
-              📤 Backup ဖိုင် Share မည်
+              {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600 shrink-0" /> : <Share2 className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400 shrink-0" />}
+              <span>Share</span>
             </button>
 
+            {/* 7. Restore */}
             <button
               onClick={handleRestoreClick}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-sky-600/20 cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-2 py-2.5 bg-sky-50 hover:bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 dark:hover:bg-sky-900/60 border border-sky-200 dark:border-sky-800 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-2xs cursor-pointer min-h-[40px] whitespace-nowrap"
               title="သိမ်းဆည်းထားသော JSON Backup ဖိုင်ကို ရွေးချယ်ပြီး Restore ပြန်သွင်းမည်"
             >
-              <Upload className="w-4 h-4" />
-              📥 Restore (ဖိုင်ရွေးမည်)
+              <Upload className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+              <span>Restore</span>
             </button>
 
+            {/* 8. Reset to Zero */}
             <button
               onClick={handleResetToZero}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-2 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/40 border border-rose-200 dark:border-rose-900/60 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-2xs cursor-pointer min-h-[40px] whitespace-nowrap"
               title="အရောင်းအဝယ် စာရင်းအားလုံး ရှင်းထုတ်ပြီး လက်ကျန်ငွေ 0 သို့ Reset ချမည်"
             >
-              <RotateCcw className="w-4 h-4" />
-              🔄 စာရင်းအားလုံး ရှင်းမည် (0 ချမည်)
+              <RotateCcw className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+              <span>Reset (၀)</span>
             </button>
 
             <input
