@@ -259,7 +259,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     }
     const rows = getReportRows();
     const summaryRow = [
-      'စုစုပေါင်း Total',
+      'စုစုပေါင်း (Total)',
       '',
       '',
       '',
@@ -274,7 +274,8 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       '',
       '',
       '',
-      `စာရင်းပေါင်း ${filteredData.length} ခု`,
+      '',
+      `စာရင်းပေါင်း ${filteredData.length} ခု (Total: ${filteredData.length})`,
     ];
 
     await exportToExcelNative({
@@ -322,7 +323,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     try {
       const rows = getReportRows();
       const summaryRow = [
-        'စုစုပေါင်း Total',
+        'စုစုပေါင်း (Total)',
         '',
         '',
         '',
@@ -338,7 +339,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         '',
         '',
         '',
-        `စာရင်းပေါင်း ${filteredData.length} ခု`,
+        `စာရင်းပေါင်း ${filteredData.length} ခု (Total: ${filteredData.length})`,
       ];
 
       await exportToPdfNative({

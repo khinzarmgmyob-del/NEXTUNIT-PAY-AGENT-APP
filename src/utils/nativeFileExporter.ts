@@ -224,71 +224,108 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
  * Direct Vector PDF generator fallback using jsPDF (no canvas / no timeout)
  */
 function createFallbackVectorPdf(options: PrintReportOptions): jsPDF {
+  const isLandscape =
+    options.orientation === 'landscape' ||
+    (!options.orientation && options.tableHeaders.length >= 7);
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: isLandscape ? 'landscape' : 'portrait',
     unit: 'mm',
     format: 'a4',
   });
 
+  const pageWidth = isLandscape ? 297 : 210;
+  const pageHeight = isLandscape ? 210 : 297;
+  const margin = 12;
+  const usableWidth = pageWidth - margin * 2;
+  const totalCols = Math.min(options.tableHeaders.length, 17);
+  const colWidth = usableWidth / totalCols;
+
   const shopName = options.shopProfile?.shopName || 'Money Agent POS';
-  doc.setFontSize(13);
-  doc.text(shopName, 14, 15);
-  doc.setFontSize(11);
-  doc.text(options.title || 'Report', 14, 22);
-  if (options.subtitle) {
-    doc.setFontSize(8);
-    doc.text(options.subtitle, 14, 28);
-  }
+  let currentPage = 1;
+  const rowsPerPage = isLandscape ? 18 : 28;
+  const totalPages = Math.max(1, Math.ceil(options.tableRows.length / rowsPerPage));
 
-  let startY = 34;
+  const drawHeader = (startY: number) => {
+    doc.setFontSize(12);
+    doc.text(shopName, margin, startY);
+    doc.setFontSize(10);
+    doc.text(options.title || 'Report', margin, startY + 5);
+    if (options.subtitle) {
+      doc.setFontSize(7.5);
+      doc.text(options.subtitle, margin, startY + 10);
+    }
+    return startY + 14;
+  };
+
+  const drawTableHead = (y: number) => {
+    doc.setFontSize(6.5);
+    options.tableHeaders.slice(0, totalCols).forEach((h, idx) => {
+      doc.text(String(h).substring(0, 14), margin + idx * colWidth, y);
+    });
+    doc.line(margin, y + 2, pageWidth - margin, y + 2);
+    return y + 6;
+  };
+
+  const drawFooter = (pNum: number) => {
+    doc.setFontSize(7);
+    doc.text(`Page ${pNum} of ${totalPages}`, margin, pageHeight - 6);
+    doc.text(`Money Agent POS`, pageWidth - margin - 25, pageHeight - 6);
+  };
+
+  let currentY = drawHeader(12);
   if (options.summaryCards && options.summaryCards.length > 0) {
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
     const cardTexts = options.summaryCards.map((c) => `${c.label}: ${c.value}`).join('  |  ');
-    doc.text(cardTexts, 14, startY);
-    startY += 8;
+    doc.text(cardTexts, margin, currentY);
+    currentY += 7;
   }
 
-  const maxCols = Math.min(options.tableHeaders.length, 10);
-  const headers = options.tableHeaders.slice(0, maxCols);
-  const colWidth = (210 - 28) / maxCols;
-
-  doc.setFontSize(8);
-  headers.forEach((h, idx) => {
-    doc.text(String(h).substring(0, 16), 14 + idx * colWidth, startY);
-  });
-  doc.line(14, startY + 2, 196, startY + 2);
-  startY += 6;
+  currentY = drawTableHead(currentY);
 
   options.tableRows.forEach((row) => {
-    if (startY > 280) {
-      doc.addPage();
-      startY = 15;
+    if (currentY > pageHeight - 16) {
+      drawFooter(currentPage);
+      doc.addPage('a4', isLandscape ? 'landscape' : 'portrait');
+      currentPage++;
+      currentY = 12;
+      doc.setFontSize(9);
+      doc.text(`${shopName} • ${options.title}`, margin, currentY);
+      currentY += 5;
+      currentY = drawTableHead(currentY);
     }
-    row.slice(0, maxCols).forEach((cell, idx) => {
+
+    doc.setFontSize(6);
+    row.slice(0, totalCols).forEach((cell, idx) => {
       const val = cell !== undefined && cell !== null ? String(cell) : '';
-      doc.text(val.substring(0, 16), 14 + idx * colWidth, startY);
+      doc.text(val.substring(0, 14), margin + idx * colWidth, currentY);
     });
-    startY += 5;
+    currentY += 4.5;
   });
 
   if (options.summaryRow && options.summaryRow.length > 0) {
-    if (startY > 275) {
-      doc.addPage();
-      startY = 15;
+    if (currentY > pageHeight - 18) {
+      drawFooter(currentPage);
+      doc.addPage('a4', isLandscape ? 'landscape' : 'portrait');
+      currentPage++;
+      currentY = 14;
     }
-    doc.line(14, startY, 196, startY);
-    startY += 4;
-    options.summaryRow.slice(0, maxCols).forEach((cell, idx) => {
+    doc.line(margin, currentY, pageWidth - margin, currentY);
+    currentY += 4;
+    doc.setFontSize(6.5);
+    options.summaryRow.slice(0, totalCols).forEach((cell, idx) => {
       const val = cell !== undefined && cell !== null ? String(cell) : '';
-      doc.text(val.substring(0, 16), 14 + idx * colWidth, startY);
+      doc.text(val.substring(0, 14), margin + idx * colWidth, currentY);
     });
   }
 
+  drawFooter(currentPage);
   return doc;
 }
 
 /**
  * Native + Web PDF Exporter
+ * - Auto-Fit to A4 Landscape for multi-column tables (>6 cols)
+ * - Automatic Multi-Page pagination (Page 1, 2, 3...)
  * - On Mobile Native: Generates real PDF binary, writes to Documents, launches FileOpener with "Open with" chooser
  * - On Web Browser: Directly downloads or triggers Web Share
  */
@@ -301,67 +338,105 @@ export async function exportToPdfNative(
       : `${options.filename}.pdf`
     : `Report_${Date.now()}.pdf`;
 
+  const isLandscape =
+    options.orientation === 'landscape' ||
+    (!options.orientation && options.tableHeaders.length >= 7);
+  const paperWidthMm = isLandscape ? 297 : 210;
+  const paperHeightMm = isLandscape ? 210 : 297;
+  const containerWidthPx = isLandscape ? 1122 : 800;
+
   let pdfDoc: jsPDF;
 
   // Render hidden offscreen container with full opacity for canvas rendering
-  const reportHtml = buildReportHtmlMarkup(options);
+  const reportHtml = buildReportHtmlMarkup({
+    ...options,
+    orientation: isLandscape ? 'landscape' : 'portrait',
+  });
+
   const container = document.createElement('div');
   container.style.position = 'fixed';
   container.style.top = '0';
   container.style.left = '-10000px';
-  container.style.width = '800px';
+  container.style.width = `${containerWidthPx}px`;
   container.style.zIndex = '99999';
   container.style.opacity = '1';
   container.style.pointerEvents = 'none';
   container.style.background = '#ffffff';
   container.style.color = '#000000';
-  container.style.padding = '20px';
-  container.style.fontFamily = "'Pyidaungsu', 'Padauk', 'Myanmar3', 'Noto Sans Myanmar', -apple-system, BlinkMacSystemFont, sans-serif";
+  container.style.fontFamily =
+    "'Noto Sans Myanmar', 'Padauk', 'Pyidaungsu', 'Plus Jakarta Sans', Arial, sans-serif";
   container.innerHTML = reportHtml;
   document.body.appendChild(container);
 
   try {
-    const canvasPromise = html2canvas(container, {
-      scale: 1.2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-      windowWidth: 800,
-    });
-
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('PDF Canvas render timed out')), 12000)
-    );
-
-    const canvas = await Promise.race([canvasPromise, timeoutPromise]);
-
-    const imgData = canvas.toDataURL('image/jpeg', 0.90);
+    const pageElements = container.querySelectorAll<HTMLElement>('.report-page');
     const pdf = new jsPDF({
-      orientation: 'portrait',
+      orientation: isLandscape ? 'landscape' : 'portrait',
       unit: 'mm',
       format: 'a4',
     });
 
-    const imgWidth = 210;
-    const pageHeight = 297;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    let heightLeft = imgHeight;
-    let position = 0;
+    if (pageElements.length > 0) {
+      for (let i = 0; i < pageElements.length; i++) {
+        const pageEl = pageElements[i];
+        // Temporarily reset borders/shadows/margins for clean page capture
+        const prevBoxShadow = pageEl.style.boxShadow;
+        const prevBorder = pageEl.style.border;
+        const prevMargin = pageEl.style.marginBottom;
+        pageEl.style.boxShadow = 'none';
+        pageEl.style.border = 'none';
+        pageEl.style.marginBottom = '0';
 
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
+        const canvasPromise = html2canvas(pageEl, {
+          scale: 1.25,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          windowWidth: containerWidthPx,
+        });
 
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('PDF Canvas render timed out')), 15000)
+        );
+
+        const canvas = await Promise.race([canvasPromise, timeoutPromise]);
+
+        pageEl.style.boxShadow = prevBoxShadow;
+        pageEl.style.border = prevBorder;
+        pageEl.style.marginBottom = prevMargin;
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.90);
+        if (i > 0) {
+          pdf.addPage('a4', isLandscape ? 'landscape' : 'portrait');
+        }
+        pdf.addImage(imgData, 'JPEG', 0, 0, paperWidthMm, paperHeightMm);
+      }
+    } else {
+      // Fallback single capture
+      const canvasPromise = html2canvas(container, {
+        scale: 1.2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: containerWidthPx,
+      });
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('PDF Canvas render timed out')), 15000)
+      );
+
+      const canvas = await Promise.race([canvasPromise, timeoutPromise]);
+      const imgData = canvas.toDataURL('image/jpeg', 0.90);
+      pdf.addImage(imgData, 'JPEG', 0, 0, paperWidthMm, paperHeightMm);
     }
 
     pdfDoc = pdf;
   } catch (canvasErr) {
     console.warn('Canvas rendering fallback to vector PDF:', canvasErr);
-    pdfDoc = createFallbackVectorPdf(options);
+    pdfDoc = createFallbackVectorPdf({
+      ...options,
+      orientation: isLandscape ? 'landscape' : 'portrait',
+    });
   } finally {
     if (document.body.contains(container)) {
       document.body.removeChild(container);

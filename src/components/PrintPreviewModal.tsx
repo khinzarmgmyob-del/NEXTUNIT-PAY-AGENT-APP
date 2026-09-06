@@ -32,8 +32,11 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
   onClose,
   reportOptions,
 }) => {
+  const defaultOrientation: Orientation =
+    reportOptions.orientation ||
+    (reportOptions.tableHeaders && reportOptions.tableHeaders.length >= 7 ? 'landscape' : 'portrait');
   const [paperSize, setPaperSize] = useState<PaperSize>('a4');
-  const [orientation, setOrientation] = useState<Orientation>('portrait');
+  const [orientation, setOrientation] = useState<Orientation>(defaultOrientation);
   const [marginSize, setMarginSize] = useState<MarginSize>('normal');
   const [scale, setScale] = useState<number>(100);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -66,16 +69,19 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
   const getMarginCss = () => {
     switch (marginSize) {
       case 'compact':
-        return '8mm';
+        return '6mm 8mm';
       case 'wide':
-        return '22mm';
+        return '16mm 20mm';
       default:
-        return '14mm';
+        return '8mm 12mm';
     }
   };
 
   // Generate customized HTML markup
-  const htmlContent = buildReportHtmlMarkup(reportOptions);
+  const htmlContent = buildReportHtmlMarkup({
+    ...reportOptions,
+    orientation,
+  });
 
   // Direct Print Trigger with Page Setup CSS (100% reliable inside iframes & webviews)
   const handlePrint = () => {
@@ -87,10 +93,59 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
 <head>
   <meta charset="utf-8" />
   <title>${reportOptions.title}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;500;600;700&family=Padauk:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     @page {
       size: ${pageSizeCss};
       margin: ${marginCss};
+    }
+    @media print {
+      body {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        display: block !important;
+        overflow: visible !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .report-page {
+        page-break-after: always !important;
+        break-after: page !important;
+        width: 100% !important;
+        min-height: 100% !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+        padding: 4mm 6mm !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+      .report-page:last-child {
+        page-break-after: auto !important;
+        break-after: auto !important;
+      }
+      table {
+        width: 100% !important;
+        max-width: 100% !important;
+        table-layout: auto !important;
+        word-wrap: break-word !important;
+        font-size: ${orientation === 'landscape' ? '8.5pt' : '9.5pt'} !important;
+      }
+      th, td {
+        border: 1px solid #94a3b8 !important;
+        padding: 3px 5px !important;
+      }
+      tr {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
     }
     * {
       box-sizing: border-box;
@@ -98,16 +153,13 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
       padding: 0;
     }
     body {
-      font-family: ${UNICODE_FONT_FAMILY};
+      font-family: 'Plus Jakarta Sans', 'Noto Sans Myanmar', 'Padauk', 'Pyidaungsu', Arial, sans-serif;
       color: #000000;
       background: #ffffff;
       padding: ${marginCss};
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       zoom: ${scale}%;
-    }
-    .no-print {
-      display: none !important;
     }
   </style>
 </head>
@@ -125,6 +177,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
     try {
       await exportToPdfNative({
         ...reportOptions,
+        orientation,
         filename: reportOptions.filename || `${reportOptions.title.replace(/\s+/g, '_')}_${Date.now()}.pdf`,
       });
     } catch (err: any) {

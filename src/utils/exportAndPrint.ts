@@ -216,10 +216,112 @@ export interface PrintReportOptions {
   tableRows: (string | number)[][];
   summaryRow?: (string | number)[];
   columnAligns?: ('left' | 'center' | 'right')[];
+  orientation?: 'portrait' | 'landscape';
 }
 
 /**
- * Builds standard clean HTML markup for A4 Report sheets
+ * Converts Western digits (0-9) to Myanmar digits (၀-၉)
+ */
+export function toMyanmarDigits(num: number | string): string {
+  const mmDigits = ['၀', '၁', '၂', '၃', '၄', '၅', '၆', '၇', '၈', '၉'];
+  return num
+    .toString()
+    .split('')
+    .map((char) => {
+      const parsed = parseInt(char, 10);
+      return !isNaN(parsed) && parsed >= 0 && parsed <= 9 ? mmDigits[parsed] : char;
+    })
+    .join('');
+}
+
+interface ReportPageChunk {
+  pageIndex: number;
+  totalPages: number;
+  isFirstPage: boolean;
+  isLastPage: boolean;
+  startRowIndex: number;
+  endRowIndex: number;
+  rows: (string | number)[][];
+  summaryRow?: (string | number)[];
+}
+
+function chunkReportRows(
+  rows: (string | number)[][],
+  summaryRow: (string | number)[] | undefined,
+  firstPageCapacity: number,
+  otherPageCapacity: number
+): ReportPageChunk[] {
+  if (rows.length === 0) {
+    return [
+      {
+        pageIndex: 0,
+        totalPages: 1,
+        isFirstPage: true,
+        isLastPage: true,
+        startRowIndex: 0,
+        endRowIndex: 0,
+        rows: [],
+        summaryRow,
+      },
+    ];
+  }
+
+  // If everything fits on the first page
+  if (rows.length <= firstPageCapacity) {
+    return [
+      {
+        pageIndex: 0,
+        totalPages: 1,
+        isFirstPage: true,
+        isLastPage: true,
+        startRowIndex: 1,
+        endRowIndex: rows.length,
+        rows,
+        summaryRow,
+      },
+    ];
+  }
+
+  const chunks: ReportPageChunk[] = [];
+  const p1Rows = rows.slice(0, firstPageCapacity);
+  chunks.push({
+    pageIndex: 0,
+    totalPages: 0,
+    isFirstPage: true,
+    isLastPage: false,
+    startRowIndex: 1,
+    endRowIndex: p1Rows.length,
+    rows: p1Rows,
+  });
+
+  let currentIdx = firstPageCapacity;
+  while (currentIdx < rows.length) {
+    const nextBatch = rows.slice(currentIdx, currentIdx + otherPageCapacity);
+    const startNum = currentIdx + 1;
+    const endNum = currentIdx + nextBatch.length;
+    currentIdx += otherPageCapacity;
+    const isLast = currentIdx >= rows.length;
+    chunks.push({
+      pageIndex: chunks.length,
+      totalPages: 0,
+      isFirstPage: false,
+      isLastPage: isLast,
+      startRowIndex: startNum,
+      endRowIndex: endNum,
+      rows: nextBatch,
+      summaryRow: isLast ? summaryRow : undefined,
+    });
+  }
+
+  const total = chunks.length;
+  chunks.forEach((c) => {
+    c.totalPages = total;
+  });
+  return chunks;
+}
+
+/**
+ * Builds standard clean HTML markup for A4 Report sheets with Auto-Fit & Multi-Page Pagination
  */
 export function buildReportHtmlMarkup({
   title,
@@ -230,122 +332,218 @@ export function buildReportHtmlMarkup({
   tableRows,
   summaryRow,
   columnAligns = [],
+  orientation,
 }: PrintReportOptions): string {
+  const isLandscape = orientation === 'landscape' || (!orientation && tableHeaders.length >= 7);
   const shopName = shopProfile?.shopName || 'Money Agent POS';
   const shopAddress = shopProfile?.address || '';
   const shopPhone = shopProfile?.phone || '';
   const datePrinted = new Date().toLocaleString('en-GB');
 
   const alignStyles = tableHeaders.map((_, i) => {
-    const align = columnAligns[i] || (i === 0 || i === 1 ? 'center' : i >= tableHeaders.length - 2 ? 'left' : 'right');
+    const align =
+      columnAligns[i] ||
+      (i === 0 || i === 1 || i === 2 ? 'center' : i >= tableHeaders.length - 2 ? 'left' : 'right');
     return align;
   });
 
-  const cardsHtml =
-    summaryCards.length > 0
-      ? `
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 12px;">
+  const pageWidthPx = isLandscape ? 1122 : 800;
+  const pageMinHeightPx = isLandscape ? 770 : 1080;
+  const firstPageCapacity = isLandscape
+    ? summaryCards.length > 0
+      ? 14
+      : 18
+    : summaryCards.length > 0
+    ? 22
+    : 28;
+  const otherPageCapacity = isLandscape ? 20 : 30;
+
+  const chunks = chunkReportRows(tableRows, summaryRow, firstPageCapacity, otherPageCapacity);
+  const totalChunks = chunks.length;
+
+  const renderCardsHtml = () => {
+    if (!summaryCards || summaryCards.length === 0) return '';
+    return `
+      <div style="display: grid; grid-template-columns: repeat(${Math.min(
+        summaryCards.length,
+        4
+      )}, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px;">
         ${summaryCards
           .map(
             (c) => `
-          <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; background: #f8fafc;">
-            <div style="font-size: 9px; font-weight: bold; color: #475569; text-transform: uppercase;">${c.label}</div>
-            <div style="font-size: 13px; font-weight: 900; color: #0f172a; margin-top: 2px;">${c.value}</div>
-            ${c.note ? `<div style="font-size: 9px; color: #64748b;">${c.note}</div>` : ''}
+          <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; background: #f8fafc;">
+            <div style="font-size: 8.5px; font-weight: bold; color: #475569; text-transform: uppercase;">${c.label}</div>
+            <div style="font-size: 12px; font-weight: 900; color: #0f172a; margin-top: 1px;">${c.value}</div>
+            ${c.note ? `<div style="font-size: 8px; color: #64748b; margin-top: 1px;">${c.note}</div>` : ''}
           </div>
         `
           )
           .join('')}
       </div>
-    `
-      : '';
+    `;
+  };
 
-  const theadHtml = `
+  const renderTableHeader = () => `
     <thead>
       <tr>
         ${tableHeaders
           .map(
             (h, i) =>
-              `<th style="background-color: #f1f5f9; color: #0f172a; font-weight: bold; border: 1px solid #94a3b8; padding: 6px 8px; font-size: 10px; text-align: ${alignStyles[i]}; white-space: nowrap;">${h}</th>`
+              `<th style="background-color: #f1f5f9; color: #0f172a; font-weight: bold; border: 1px solid #94a3b8; padding: 4px 5px; font-size: ${
+                isLandscape ? '9px' : '10px'
+              }; text-align: ${alignStyles[i]}; white-space: nowrap;">${h}</th>`
           )
           .join('')}
       </tr>
     </thead>
   `;
 
-  const tbodyHtml = `
-    <tbody>
-      ${
-        tableRows.length === 0
-          ? `<tr><td colspan="${tableHeaders.length}" style="text-align:center; padding: 20px; color:#888; border: 1px solid #cbd5e1;">ဒေတာ မရှိပါ</td></tr>`
-          : tableRows
-              .map(
-                (row, rowIdx) => `
-            <tr style="background-color: ${rowIdx % 2 === 1 ? '#f8fafc' : '#ffffff'};">
-              ${row
-                .map((cell, colIdx) => {
-                  const align = alignStyles[colIdx] || 'left';
-                  const cellStr = cell !== undefined && cell !== null ? String(cell) : '-';
-                  const isPositive = cellStr.startsWith('+');
-                  const isNegative = cellStr.startsWith('-');
-                  const colorStyle = isPositive
-                    ? 'color: #047857; font-weight: bold;'
-                    : isNegative
-                    ? 'color: #b91c1c; font-weight: bold;'
-                    : 'color: #1e293b;';
-                  return `<td style="border: 1px solid #cbd5e1; padding: 5px 8px; font-size: 10px; text-align: ${align}; ${colorStyle}; white-space: nowrap;">${cellStr}</td>`;
-                })
-                .join('')}
-            </tr>
-          `
-              )
-              .join('')
-      }
-      ${
-        summaryRow && summaryRow.length > 0
-          ? `
-        <tr style="background-color: #e2e8f0; border-top: 2px solid #0f172a; font-weight: bold;">
-          ${summaryRow
-            .map((cell, colIdx) => {
-              const align = alignStyles[colIdx] || 'left';
-              const cellStr = cell !== undefined && cell !== null ? String(cell) : '';
-              const isPositive = cellStr.startsWith('+');
-              const isNegative = cellStr.startsWith('-');
-              const colorStyle = isPositive
-                ? 'color: #047857;'
-                : isNegative
-                ? 'color: #b91c1c;'
-                : 'color: #0f172a;';
-              return `<td style="border: 1px solid #94a3b8; padding: 6px 8px; font-size: 10px; text-align: ${align}; font-weight: bold; ${colorStyle}">${cellStr}</td>`;
-            })
-            .join('')}
-        </tr>
-      `
-          : ''
-      }
-    </tbody>
+  const renderTableRow = (row: (string | number)[], rowIdx: number) => `
+    <tr style="background-color: ${rowIdx % 2 === 1 ? '#f8fafc' : '#ffffff'};">
+      ${row
+        .map((cell, colIdx) => {
+          const align = alignStyles[colIdx] || 'left';
+          const cellStr = cell !== undefined && cell !== null ? String(cell) : '-';
+          const isPositive = cellStr.startsWith('+');
+          const isNegative = cellStr.startsWith('-');
+          const colorStyle = isPositive
+            ? 'color: #047857; font-weight: bold;'
+            : isNegative
+            ? 'color: #b91c1c; font-weight: bold;'
+            : 'color: #1e293b;';
+          const isNowrap =
+            colIdx < 3 ||
+            colIdx === 5 ||
+            colIdx === 6 ||
+            colIdx === 7 ||
+            colIdx === 8 ||
+            colIdx === 9 ||
+            colIdx === 11;
+          return `<td style="border: 1px solid #cbd5e1; padding: 3px 5px; font-size: ${
+            isLandscape ? '8.5px' : '9.5px'
+          }; text-align: ${align}; ${colorStyle}; ${
+            isNowrap ? 'white-space: nowrap;' : 'word-break: break-word;'
+          }">${cellStr}</td>`;
+        })
+        .join('')}
+    </tr>
   `;
 
+  const renderSummaryRow = (sRow: (string | number)[]) => `
+    <tr style="background-color: #e2e8f0; border-top: 2px solid #0f172a; font-weight: bold;">
+      ${sRow
+        .map((cell, colIdx) => {
+          const align = alignStyles[colIdx] || 'left';
+          const cellStr = cell !== undefined && cell !== null ? String(cell) : '';
+          const isPositive = cellStr.startsWith('+');
+          const isNegative = cellStr.startsWith('-');
+          const colorStyle = isPositive
+            ? 'color: #047857;'
+            : isNegative
+            ? 'color: #b91c1c;'
+            : 'color: #0f172a;';
+          return `<td style="border: 1px solid #94a3b8; padding: 4px 5px; font-size: ${
+            isLandscape ? '9px' : '10px'
+          }; text-align: ${align}; font-weight: bold; ${colorStyle}">${cellStr}</td>`;
+        })
+        .join('')}
+    </tr>
+  `;
+
+  // Render paginated sheets (report-page)
+  const pagesHtml = chunks
+    .map((chunk) => {
+      const pageNum = chunk.pageIndex + 1;
+      const mmPageNum = toMyanmarDigits(pageNum);
+      const mmTotal = toMyanmarDigits(totalChunks);
+
+      if (chunk.isFirstPage) {
+        return `
+        <div class="report-page" data-page="${pageNum}" style="width: ${pageWidthPx}px; min-height: ${pageMinHeightPx}px; box-sizing: border-box; padding: 14px 18px; background: #ffffff; color: #0f172a; display: flex; flex-direction: column; justify-content: space-between; page-break-after: ${
+          totalChunks > 1 ? 'always' : 'auto'
+        }; break-after: ${
+          totalChunks > 1 ? 'page' : 'auto'
+        }; margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); font-family: 'Plus Jakarta Sans', 'Noto Sans Myanmar', 'Padauk', 'Pyidaungsu', sans-serif;">
+          <div>
+            <!-- Shop Header -->
+            <div style="text-align: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid #0f172a;">
+              <div style="font-size: 16px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase;">${shopName}</div>
+              ${
+                shopAddress || shopPhone
+                  ? `<div style="font-size: 10px; color: #475569; margin-top: 1px;">${[shopAddress, shopPhone]
+                      .filter(Boolean)
+                      .join(' • ')}</div>`
+                  : ''
+              }
+              <div style="font-size: 13px; font-weight: bold; color: #1e293b; margin-top: 4px;">${title}</div>
+              <div style="font-size: 9.5px; color: #64748b; margin-top: 2px;">${subtitle || ''} | ထုတ်ယူချိန် (Printed): ${datePrinted}</div>
+            </div>
+
+            <!-- Summary Cards -->
+            ${renderCardsHtml()}
+
+            <!-- Table -->
+            <table style="width: 100%; border-collapse: collapse; margin-top: 4px;">
+              ${renderTableHeader()}
+              <tbody>
+                ${
+                  chunk.rows.length === 0
+                    ? `<tr><td colspan="${tableHeaders.length}" style="text-align:center; padding: 20px; color:#888; border: 1px solid #cbd5e1;">ဒေတာ မရှိပါ (No Data)</td></tr>`
+                    : chunk.rows.map((row, rIdx) => renderTableRow(row, rIdx)).join('')
+                }
+                ${chunk.isLastPage && chunk.summaryRow ? renderSummaryRow(chunk.summaryRow) : ''}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Page Footer -->
+          <div style="margin-top: 10px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; font-size: 8.5px; color: #64748b;">
+            <div>စာရင်းပေါင်း (Total): ${tableRows.length} ခု • မှတ်တမ်းအမှတ် (Records): ${chunk.startRowIndex}-${chunk.endRowIndex}</div>
+            <div style="font-weight: bold; color: #0f172a;">စာမျက်နှာ ${mmPageNum} / ${mmTotal} • Page ${pageNum} of ${totalChunks}</div>
+            <div>ထုတ်ယူသည့်စနစ်: Money Agent POS</div>
+          </div>
+        </div>
+      `;
+      }
+
+      // Subsequent Pages
+      return `
+      <div class="report-page" data-page="${pageNum}" style="width: ${pageWidthPx}px; min-height: ${pageMinHeightPx}px; box-sizing: border-box; padding: 14px 18px; background: #ffffff; color: #0f172a; display: flex; flex-direction: column; justify-content: space-between; page-break-after: ${
+        chunk.isLastPage ? 'auto' : 'always'
+      }; break-after: ${
+        chunk.isLastPage ? 'auto' : 'page'
+      }; margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); font-family: 'Plus Jakarta Sans', 'Noto Sans Myanmar', 'Padauk', 'Pyidaungsu', sans-serif;">
+        <div>
+          <!-- Compact Top Banner -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 4px; border-bottom: 2px solid #0f172a; margin-bottom: 6px;">
+            <div style="font-size: 11.5px; font-weight: 900; color: #0f172a; text-transform: uppercase;">${shopName} • ${title}</div>
+            <div style="font-size: 9px; color: #64748b;">${subtitle || ''} | စာမျက်နှာ ${mmPageNum} / ${mmTotal} (Page ${pageNum}/${totalChunks})</div>
+          </div>
+
+          <!-- Table with repeated Header -->
+          <table style="width: 100%; border-collapse: collapse; margin-top: 4px;">
+            ${renderTableHeader()}
+            <tbody>
+              ${chunk.rows.map((row, rIdx) => renderTableRow(row, rIdx)).join('')}
+              ${chunk.isLastPage && chunk.summaryRow ? renderSummaryRow(chunk.summaryRow) : ''}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Page Footer -->
+        <div style="margin-top: 10px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; font-size: 8.5px; color: #64748b;">
+          <div>မှတ်တမ်းအမှတ် (Records): ${chunk.startRowIndex}-${chunk.endRowIndex} / ${tableRows.length}</div>
+          <div style="font-weight: bold; color: #0f172a;">စာမျက်နှာ ${mmPageNum} / ${mmTotal} • Page ${pageNum} of ${totalChunks}</div>
+          <div>ထုတ်ယူသည့်စနစ်: Money Agent POS</div>
+        </div>
+      </div>
+    `;
+    })
+    .join('');
+
   return `
-    <div class="report-content" style="font-family: 'Plus Jakarta Sans', 'Pyidaungsu', 'Padauk', Arial, sans-serif; color: #0f172a; background: #fff; padding: 12px; font-size: 11px; line-height: 1.4; width: 100%;">
-      <div style="text-align: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid #0f172a;">
-        <div style="font-size: 18px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase;">${shopName}</div>
-        ${shopAddress || shopPhone ? `<div style="font-size: 11px; color: #475569; margin-top: 2px;">${[shopAddress, shopPhone].filter(Boolean).join(' • ')}</div>` : ''}
-        <div style="font-size: 14px; font-weight: bold; color: #1e293b; margin-top: 6px;">${title}</div>
-        <div style="font-size: 10px; color: #64748b; margin-top: 3px;">${subtitle || ''} | ထုတ်ယူချိန်: ${datePrinted}</div>
-      </div>
-
-      ${cardsHtml}
-
-      <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
-        ${theadHtml}
-        ${tbodyHtml}
-      </table>
-
-      <div style="margin-top: 16px; padding-top: 8px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; font-size: 9px; color: #64748b;">
-        <div>စာရင်းပေါင်း: ${tableRows.length} ခု</div>
-        <div>ထုတ်ယူသည့်စနစ်: Money Agent POS</div>
-      </div>
+    <div class="report-wrapper" style="font-family: 'Plus Jakarta Sans', 'Noto Sans Myanmar', 'Padauk', 'Pyidaungsu', Arial, sans-serif; color: #0f172a; background: transparent; width: 100%; display: flex; flex-direction: column; align-items: center;">
+      ${pagesHtml}
     </div>
   `;
 }
@@ -472,19 +670,29 @@ export function buildReceiptHtmlMarkup(transactionOrHtml: Transaction | string, 
  * Generates standalone full HTML document with embedded CSS Media Print rules for Auto-Fit & A4 Portrait
  */
 export function generateFullReportHtmlDocument(options: PrintReportOptions): string {
-  const content = buildReportHtmlMarkup(options);
+  const isLandscape = options.orientation === 'landscape' || (!options.orientation && options.tableHeaders.length >= 7);
+  const pageSizeCss = isLandscape ? 'A4 landscape' : 'A4 portrait';
+  const pageMarginCss = isLandscape ? '6mm 8mm' : '8mm 10mm';
+  const content = buildReportHtmlMarkup({
+    ...options,
+    orientation: isLandscape ? 'landscape' : 'portrait',
+  });
+
   return `<!DOCTYPE html>
 <html lang="my">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes" />
   <title>${options.title}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;500;600;700&family=Padauk:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    @page {
+      size: ${pageSizeCss};
+      margin: ${pageMarginCss};
+    }
     @media print {
-      @page {
-        size: A4 portrait;
-        margin: 10mm;
-      }
       body {
         width: 100% !important;
         margin: 0 !important;
@@ -493,22 +701,52 @@ export function generateFullReportHtmlDocument(options: PrintReportOptions): str
         color: #000000 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+        display: block !important;
+        overflow: visible !important;
       }
-      /* Report Container ကို စာရွက်အကျယ်နဲ့ Auto Fit ဖြစ်အောင် ညှိခြင်း */
-      .report-container, table {
-        width: 100% !important;
-        max-width: 100% !important;
-        table-layout: fixed !important;
-        word-wrap: break-word !important;
-        font-size: 10pt !important; /* Auto scale font size */
-      }
-      /* Print တွင် မပါချင်သော App Header/Buttons များကို ဖျောက်ခြင်း */
       .no-print, button, navbar, .action-bar {
         display: none !important;
       }
+      .report-wrapper {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: block !important;
+      }
+      .report-page {
+        page-break-after: always !important;
+        break-after: page !important;
+        width: 100% !important;
+        min-height: 100% !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+        padding: 4mm 6mm !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+      .report-page:last-child {
+        page-break-after: auto !important;
+        break-after: auto !important;
+      }
+      .report-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        overflow: visible !important;
+      }
+      table {
+        width: 100% !important;
+        max-width: 100% !important;
+        table-layout: auto !important;
+        word-wrap: break-word !important;
+        font-size: ${isLandscape ? '8.5pt' : '9.5pt'} !important;
+      }
       th, td {
         border: 1px solid #94a3b8 !important;
-        padding: 4px 6px !important;
+        padding: 3px 5px !important;
         color: #000000 !important;
       }
       th {
@@ -527,7 +765,7 @@ export function generateFullReportHtmlDocument(options: PrintReportOptions): str
       padding: 0;
     }
     body {
-      font-family: 'Plus Jakarta Sans', 'Pyidaungsu', 'Padauk', Arial, sans-serif;
+      font-family: 'Plus Jakarta Sans', 'Noto Sans Myanmar', 'Padauk', 'Pyidaungsu', Arial, sans-serif;
       color: #0f172a;
       background: #f8fafc;
       padding: 16px;
@@ -540,7 +778,7 @@ export function generateFullReportHtmlDocument(options: PrintReportOptions): str
     }
     .action-bar {
       width: 100%;
-      max-width: 900px;
+      max-width: ${isLandscape ? '1140px' : '900px'};
       margin-bottom: 14px;
       padding: 10px 16px;
       background: #1e293b;
@@ -581,19 +819,16 @@ export function generateFullReportHtmlDocument(options: PrintReportOptions): str
     }
     .report-container {
       width: 100%;
-      max-width: 900px;
-      background: #ffffff;
-      padding: 16px;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+      max-width: ${isLandscape ? '1180px' : '900px'};
+      background: transparent;
+      padding: 0;
       overflow-x: auto;
     }
   </style>
 </head>
 <body>
   <div class="action-bar no-print">
-    <div style="font-weight: bold; font-size: 13px;">📄 ${options.title}</div>
+    <div style="font-weight: bold; font-size: 13px;">📄 ${options.title} (${isLandscape ? 'A4 Landscape အလျားလိုက်' : 'A4 Portrait ဒေါင်လိုက်'})</div>
     <div style="display:flex; gap: 8px;">
       <button class="action-btn" onclick="window.print()">🖨️ စာရွက်ထုတ်မည် / Save as PDF</button>
       <button class="close-btn" onclick="window.close()">❌ ပိတ်မည်</button>
