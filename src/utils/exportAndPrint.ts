@@ -217,6 +217,85 @@ export interface PrintReportOptions {
   summaryRow?: (string | number)[];
   columnAligns?: ('left' | 'center' | 'right')[];
   orientation?: 'portrait' | 'landscape';
+  fontSize?: 'compact' | 'normal' | 'large';
+  marginSize?: 'compact' | 'normal' | 'wide';
+}
+
+/**
+ * Automatically computes / aggregates totals for all amount & numeric columns in a report
+ * Fills the summaryRow so every amount column has an explicit Total at the bottom
+ */
+export function computeSummaryRowWithAllTotals(
+  tableHeaders: string[],
+  tableRows: (string | number)[][],
+  existingSummaryRow?: (string | number)[]
+): (string | number)[] {
+  const result: (string | number)[] = new Array(tableHeaders.length).fill('');
+  result[0] = 'စုစုပေါင်း (Total)';
+
+  for (let colIdx = 0; colIdx < tableHeaders.length; colIdx++) {
+    if (colIdx === 0) continue;
+
+    const existingVal = existingSummaryRow?.[colIdx];
+    const existingStr = existingVal !== undefined && existingVal !== null ? String(existingVal).trim() : '';
+
+    // If existing summary row already has a specific non-empty calculated value, use it (cleaned of Ks)
+    if (existingStr && existingStr !== '-' && existingStr !== '0' && existingStr !== '') {
+      result[colIdx] = existingStr.replace(/\s*Ks/gi, '').trim();
+      continue;
+    }
+
+    const headerTitle = tableHeaders[colIdx] || '';
+    // Skip phone numbers, voucher reference, index, etc.
+    const isPhoneOrRef = /ဖုန်း|Phone|OCR|Ref|နံပါတ်|No|အမှတ်|စဉ်|Index|အချိန်|Time|ပုံစံ|Mode/i.test(headerTitle);
+    if (isPhoneOrRef) {
+      result[colIdx] = '';
+      continue;
+    }
+
+    // Inspect rows for numeric amounts in this column
+    let validNumberCount = 0;
+    let sum = 0;
+    let hasPlusSign = false;
+    let hasMinusSign = false;
+
+    for (const row of tableRows) {
+      const cell = row[colIdx];
+      if (cell === undefined || cell === null) continue;
+      const cellStr = String(cell).replace(/\s*Ks/gi, '').replace(/,/g, '').trim();
+      if (!cellStr || cellStr === '-') continue;
+
+      const num = parseFloat(cellStr);
+      if (!isNaN(num) && isFinite(num)) {
+        validNumberCount++;
+        sum += num;
+        if (cellStr.startsWith('+') || num > 0) hasPlusSign = true;
+        if (cellStr.startsWith('-') || num < 0) hasMinusSign = true;
+      }
+    }
+
+    if (validNumberCount > 0) {
+      if (hasPlusSign && hasMinusSign) {
+        result[colIdx] = `${sum >= 0 ? '+' : '-'}${formatKs(Math.abs(sum))}`;
+      } else if (hasPlusSign) {
+        result[colIdx] = `+${formatKs(sum)}`;
+      } else if (hasMinusSign) {
+        result[colIdx] = `-${formatKs(Math.abs(sum))}`;
+      } else {
+        result[colIdx] = formatKs(sum);
+      }
+    } else {
+      result[colIdx] = '';
+    }
+  }
+
+  // Label total record count at the last text column
+  const lastColIdx = tableHeaders.length - 1;
+  if (!result[lastColIdx] && tableRows.length > 0) {
+    result[lastColIdx] = `စာရင်းပေါင်း ${tableRows.length} ခု`;
+  }
+
+  return result;
 }
 
 /**
@@ -333,6 +412,8 @@ export function buildReportHtmlPages({
   summaryRow,
   columnAligns = [],
   orientation,
+  fontSize = 'normal',
+  marginSize = 'normal',
 }: PrintReportOptions): string[] {
   const isLandscape = orientation === 'landscape' || (!orientation && tableHeaders.length >= 7);
   const shopName = shopProfile?.shopName || 'Money Agent POS';
@@ -340,29 +421,94 @@ export function buildReportHtmlPages({
   const shopPhone = shopProfile?.phone || '';
   const datePrinted = new Date().toLocaleString('en-GB');
 
-  const alignStyles = tableHeaders.map((_, i) => {
-    const align =
-      columnAligns[i] ||
-      (i === 0 || i === 1 || i === 2 ? 'center' : i >= tableHeaders.length - 2 ? 'left' : 'right');
-    return align;
+  // Compute summary row with all numeric totals if not already complete
+  const effectiveSummaryRow = computeSummaryRowWithAllTotals(tableHeaders, tableRows, summaryRow);
+
+  const alignStyles = tableHeaders.map((header, i) => {
+    if (columnAligns[i]) return columnAligns[i];
+    if (i === 0) return 'center'; // No.
+    const h = header.toLowerCase();
+    if (h.includes('ရက်စွဲ') || h.includes('date') || h.includes('အချိန်') || h.includes('time') || h.includes('phone') || h.includes('ဖုန်း')) {
+      return 'center';
+    }
+    if (
+      h.includes('ငွေ') ||
+      h.includes('amount') ||
+      h.includes('actual') ||
+      h.includes('original') ||
+      h.includes('comm') ||
+      h.includes('balance') ||
+      h.includes('total') ||
+      h.includes('လက်ကျန်') ||
+      h.includes('နုတ်') ||
+      h.includes('ပေး')
+    ) {
+      return 'right';
+    }
+    return 'left';
   });
 
   const pageWidthPx = isLandscape ? 1122 : 800;
   const pageMinHeightPx = isLandscape ? 770 : 1080;
-  const firstPageCapacity = isLandscape
-    ? summaryCards.length > 0
-      ? 14
-      : 18
-    : summaryCards.length > 0
-    ? 22
-    : 28;
-  const otherPageCapacity = isLandscape ? 20 : 30;
 
-  const chunks = chunkReportRows(tableRows, summaryRow, firstPageCapacity, otherPageCapacity);
+  // Margin padding calculation
+  const pagePadding =
+    marginSize === 'compact'
+      ? '8px 12px'
+      : marginSize === 'wide'
+      ? '22px 26px'
+      : '14px 18px';
+
+  // Dynamic typography & spacing calculation to guarantee zero overlap
+  const colCount = tableHeaders.length;
+  let headerFontSize = '9px';
+  let bodyFontSize = '8.5px';
+  let summaryFontSize = '9px';
+  let cellPadding = '3px 4px';
+  let headerPadding = '3.5px 4px';
+
+  if (fontSize === 'compact' || colCount > 13) {
+    headerFontSize = colCount > 14 ? '7.5px' : '8px';
+    bodyFontSize = colCount > 14 ? '7.5px' : '8px';
+    summaryFontSize = '8px';
+    cellPadding = '2px 3px';
+    headerPadding = '2.5px 3px';
+  } else if (fontSize === 'large' && colCount <= 8) {
+    headerFontSize = '11px';
+    bodyFontSize = '10.5px';
+    summaryFontSize = '11px';
+    cellPadding = '5px 7px';
+    headerPadding = '6px 7px';
+  } else if (colCount <= 6) {
+    headerFontSize = '10.5px';
+    bodyFontSize = '10px';
+    summaryFontSize = '10.5px';
+    cellPadding = '4px 6px';
+    headerPadding = '5px 6px';
+  } else if (colCount <= 9) {
+    headerFontSize = '9.5px';
+    bodyFontSize = '9px';
+    summaryFontSize = '9.5px';
+    cellPadding = '3px 5px';
+    headerPadding = '4px 5px';
+  }
+
+  // Calculate page capacity based on font scale and orientation
+  const baseCapacity = isLandscape ? (summaryCards.length > 0 ? 15 : 19) : (summaryCards.length > 0 ? 22 : 28);
+  const scaleMultiplier = fontSize === 'compact' ? 1.3 : fontSize === 'large' ? 0.8 : 1.0;
+  const firstPageCapacity = Math.max(8, Math.round(baseCapacity * scaleMultiplier));
+  const otherPageCapacity = Math.max(12, Math.round((isLandscape ? 22 : 32) * scaleMultiplier));
+
+  const chunks = chunkReportRows(tableRows, effectiveSummaryRow, firstPageCapacity, otherPageCapacity);
   const totalChunks = chunks.length;
 
   const renderCardsHtml = () => {
     if (!summaryCards || summaryCards.length === 0) return '';
+    const cardTitleSize = fontSize === 'compact' ? '7.5px' : fontSize === 'large' ? '9.5px' : '8.5px';
+    const cardValSize = fontSize === 'compact' ? '11px' : fontSize === 'large' ? '13px' : '12px';
+    const cardNoteSize = fontSize === 'compact' ? '7px' : fontSize === 'large' ? '8.5px' : '8px';
+    const cardPad = fontSize === 'compact' ? '4px 8px' : fontSize === 'large' ? '8px 12px' : '6px 10px';
+
     return `
       <div style="display: grid; grid-template-columns: repeat(${Math.min(
         summaryCards.length,
@@ -371,10 +517,10 @@ export function buildReportHtmlPages({
         ${summaryCards
           .map(
             (c) => `
-          <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; background: #f8fafc;">
-            <div style="font-size: 8.5px; font-weight: bold; color: #475569; text-transform: uppercase;">${c.label}</div>
-            <div style="font-size: 12px; font-weight: 900; color: #0f172a; margin-top: 1px;">${c.value}</div>
-            ${c.note ? `<div style="font-size: 8px; color: #64748b; margin-top: 1px;">${c.note}</div>` : ''}
+          <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: ${cardPad}; background: #f8fafc;">
+            <div style="font-size: ${cardTitleSize}; font-weight: bold; color: #475569; text-transform: uppercase;">${c.label}</div>
+            <div style="font-size: ${cardValSize}; font-weight: 900; color: #0f172a; margin-top: 1px;">${c.value}</div>
+            ${c.note ? `<div style="font-size: ${cardNoteSize}; color: #64748b; margin-top: 1px;">${c.note}</div>` : ''}
           </div>
         `
           )
@@ -389,9 +535,7 @@ export function buildReportHtmlPages({
         ${tableHeaders
           .map(
             (h, i) =>
-              `<th style="background-color: #f1f5f9; color: #0f172a; font-weight: bold; border: 1px solid #94a3b8; padding: 4px 5px; font-size: ${
-                isLandscape ? '9px' : '10px'
-              }; text-align: ${alignStyles[i]}; white-space: nowrap;">${h}</th>`
+              `<th style="background-color: #f1f5f9; color: #0f172a; font-weight: 700; border: 1px solid #94a3b8; padding: ${headerPadding}; font-size: ${headerFontSize}; text-align: ${alignStyles[i]}; line-height: 1.25; word-break: normal; white-space: normal; vertical-align: middle;">${h}</th>`
           )
           .join('')}
       </tr>
@@ -411,18 +555,18 @@ export function buildReportHtmlPages({
             : isNegative
             ? 'color: #b91c1c; font-weight: bold;'
             : 'color: #1e293b;';
-          const isNowrap =
-            colIdx < 3 ||
-            colIdx === 5 ||
-            colIdx === 6 ||
-            colIdx === 7 ||
-            colIdx === 8 ||
-            colIdx === 9 ||
-            colIdx === 11;
-          return `<td style="border: 1px solid #cbd5e1; padding: 3px 5px; font-size: ${
-            isLandscape ? '8.5px' : '9.5px'
-          }; text-align: ${align}; ${colorStyle}; ${
-            isNowrap ? 'white-space: nowrap;' : 'word-break: break-word;'
+
+          // Ensure amount columns stay single-line with tabular numbers, while long text wraps cleanly
+          const isNumberOrAmount =
+            align === 'right' ||
+            isPositive ||
+            isNegative ||
+            /^[+-]?[\d,]+(\.\d+)?$/.test(cellStr.trim());
+
+          return `<td style="border: 1px solid #cbd5e1; padding: ${cellPadding}; font-size: ${bodyFontSize}; text-align: ${align}; ${colorStyle}; line-height: 1.25; ${
+            isNumberOrAmount
+              ? 'white-space: nowrap; font-variant-numeric: tabular-nums;'
+              : 'word-break: break-word;'
           }">${cellStr}</td>`;
         })
         .join('')}
@@ -442,9 +586,7 @@ export function buildReportHtmlPages({
             : isNegative
             ? 'color: #b91c1c;'
             : 'color: #0f172a;';
-          return `<td style="border: 1px solid #94a3b8; padding: 4px 5px; font-size: ${
-            isLandscape ? '9px' : '10px'
-          }; text-align: ${align}; font-weight: bold; ${colorStyle}">${cellStr}</td>`;
+          return `<td style="border: 1px solid #94a3b8; padding: ${cellPadding}; font-size: ${summaryFontSize}; text-align: ${align}; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; ${colorStyle}">${cellStr}</td>`;
         })
         .join('')}
     </tr>
@@ -458,7 +600,7 @@ export function buildReportHtmlPages({
 
     if (chunk.isFirstPage) {
       return `
-      <div class="report-page" data-page="${pageNum}" style="width: ${pageWidthPx}px; min-height: ${pageMinHeightPx}px; box-sizing: border-box; padding: 14px 18px; background: #ffffff; color: #0f172a; display: flex; flex-direction: column; justify-content: space-between; page-break-after: ${
+      <div class="report-page" data-page="${pageNum}" style="width: ${pageWidthPx}px; min-height: ${pageMinHeightPx}px; box-sizing: border-box; padding: ${pagePadding}; background: #ffffff; color: #0f172a; display: flex; flex-direction: column; justify-content: space-between; page-break-after: ${
         totalChunks > 1 ? 'always' : 'auto'
       }; break-after: ${
         totalChunks > 1 ? 'page' : 'auto'
@@ -466,23 +608,23 @@ export function buildReportHtmlPages({
         <div>
           <!-- Shop Header -->
           <div style="text-align: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid #0f172a;">
-            <div style="font-size: 16px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase;">${shopName}</div>
+            <div style="font-size: 15px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase;">${shopName}</div>
             ${
               shopAddress || shopPhone
-                ? `<div style="font-size: 10px; color: #475569; margin-top: 1px;">${[shopAddress, shopPhone]
+                ? `<div style="font-size: 9.5px; color: #475569; margin-top: 1px;">${[shopAddress, shopPhone]
                     .filter(Boolean)
                     .join(' • ')}</div>`
                 : ''
             }
-            <div style="font-size: 13px; font-weight: bold; color: #1e293b; margin-top: 4px;">${title}</div>
-            <div style="font-size: 9.5px; color: #64748b; margin-top: 2px;">${subtitle || ''} | ထုတ်ယူချိန် (Printed): ${datePrinted}</div>
+            <div style="font-size: 12.5px; font-weight: bold; color: #1e293b; margin-top: 3px;">${title}</div>
+            <div style="font-size: 9px; color: #64748b; margin-top: 2px;">${subtitle || ''} | ထုတ်ယူချိန် (Printed): ${datePrinted}</div>
           </div>
 
           <!-- Summary Cards -->
           ${renderCardsHtml()}
 
           <!-- Table -->
-          <table style="width: 100%; border-collapse: collapse; margin-top: 4px;">
+          <table style="width: 100%; border-collapse: collapse; margin-top: 4px; table-layout: auto; box-sizing: border-box;">
             ${renderTableHeader()}
             <tbody>
               ${
@@ -496,7 +638,7 @@ export function buildReportHtmlPages({
         </div>
 
         <!-- Page Footer -->
-        <div style="margin-top: 10px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; font-size: 8.5px; color: #64748b;">
+        <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; font-size: 8px; color: #64748b;">
           <div>စာရင်းပေါင်း (Total): ${tableRows.length} ခု • မှတ်တမ်းအမှတ် (Records): ${chunk.startRowIndex}-${chunk.endRowIndex}</div>
           <div style="font-weight: bold; color: #0f172a;">စာမျက်နှာ ${mmPageNum} / ${mmTotal} • Page ${pageNum} of ${totalChunks}</div>
           <div>ထုတ်ယူသည့်စနစ်: Money Agent POS</div>
@@ -507,7 +649,7 @@ export function buildReportHtmlPages({
 
     // Subsequent Pages
     return `
-    <div class="report-page" data-page="${pageNum}" style="width: ${pageWidthPx}px; min-height: ${pageMinHeightPx}px; box-sizing: border-box; padding: 14px 18px; background: #ffffff; color: #0f172a; display: flex; flex-direction: column; justify-content: space-between; page-break-after: ${
+    <div class="report-page" data-page="${pageNum}" style="width: ${pageWidthPx}px; min-height: ${pageMinHeightPx}px; box-sizing: border-box; padding: ${pagePadding}; background: #ffffff; color: #0f172a; display: flex; flex-direction: column; justify-content: space-between; page-break-after: ${
       chunk.isLastPage ? 'auto' : 'always'
     }; break-after: ${
       chunk.isLastPage ? 'auto' : 'page'
@@ -515,12 +657,12 @@ export function buildReportHtmlPages({
       <div>
         <!-- Compact Top Banner -->
         <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 4px; border-bottom: 2px solid #0f172a; margin-bottom: 6px;">
-          <div style="font-size: 11.5px; font-weight: 900; color: #0f172a; text-transform: uppercase;">${shopName} • ${title}</div>
-          <div style="font-size: 9px; color: #64748b;">${subtitle || ''} | စာမျက်နှာ ${mmPageNum} / ${mmTotal} (Page ${pageNum}/${totalChunks})</div>
+          <div style="font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase;">${shopName} • ${title}</div>
+          <div style="font-size: 8.5px; color: #64748b;">${subtitle || ''} | စာမျက်နှာ ${mmPageNum} / ${mmTotal} (Page ${pageNum}/${totalChunks})</div>
         </div>
 
         <!-- Table with repeated Header -->
-        <table style="width: 100%; border-collapse: collapse; margin-top: 4px;">
+        <table style="width: 100%; border-collapse: collapse; margin-top: 4px; table-layout: auto; box-sizing: border-box;">
           ${renderTableHeader()}
           <tbody>
             ${chunk.rows.map((row, rIdx) => renderTableRow(row, rIdx)).join('')}
@@ -530,7 +672,7 @@ export function buildReportHtmlPages({
       </div>
 
       <!-- Page Footer -->
-      <div style="margin-top: 10px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; font-size: 8.5px; color: #64748b;">
+      <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; font-size: 8px; color: #64748b;">
         <div>မှတ်တမ်းအမှတ် (Records): ${chunk.startRowIndex}-${chunk.endRowIndex} / ${tableRows.length}</div>
         <div style="font-weight: bold; color: #0f172a;">စာမျက်နှာ ${mmPageNum} / ${mmTotal} • Page ${pageNum} of ${totalChunks}</div>
         <div>ထုတ်ယူသည့်စနစ်: Money Agent POS</div>
@@ -635,18 +777,18 @@ export function buildReceiptHtmlMarkup(transactionOrHtml: Transaction | string, 
       <div style="border-top:1px dashed #666; padding-top:6px; margin-top:6px;">
         <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:3px;">
           <span>${isTransfer ? 'လွှဲပြောင်းငွေ:' : 'မူလငွေ ပမာဏ:'}</span>
-          <span>${formatKs(tx.amount)} Ks</span>
+          <span>${formatKs(tx.amount)}</span>
         </div>
         <div style="display:flex; justify-content:space-between; font-size:11px; color:#047857; margin-bottom:3px;">
           <span>ဝန်ဆောင်ခ (ကော်မရှင်):</span>
-          <span>+${formatKs(tx.commission)} Ks</span>
+          <span>+${formatKs(tx.commission)}</span>
         </div>
         ${
           isCashOut
             ? `
           <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; color:#b91c1c; border-top:1px dashed #ccc; padding-top:4px; margin-top:3px;">
             <span>ဖောက်သည်သို့ ပေးငွေ:</span>
-            <span>${formatKs(netPayout)} Ks</span>
+            <span>${formatKs(netPayout)}</span>
           </div>
         `
             : ''

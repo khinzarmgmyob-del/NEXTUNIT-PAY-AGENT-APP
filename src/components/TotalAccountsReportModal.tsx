@@ -217,9 +217,9 @@ export const TotalAccountsReportModal: React.FC<TotalAccountsReportModalProps> =
         '',
         '',
         '',
-        ...cashAccountTotals.map((c) => `${c > 0 ? '+' : ''}${formatKs(c)} Ks`),
-        ...walletTotals.map((w) => `${w > 0 ? '+' : ''}${formatKs(w)} Ks`),
-        `+${formatKs(totalCommission)} Ks`,
+        ...cashAccountTotals.map((c) => `${c > 0 ? '+' : ''}${formatKs(c)}`),
+        ...walletTotals.map((w) => `${w > 0 ? '+' : ''}${formatKs(w)}`),
+        `+${formatKs(totalCommission)}`,
         '',
         '',
       ];
@@ -229,10 +229,10 @@ export const TotalAccountsReportModal: React.FC<TotalAccountsReportModalProps> =
         subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
         shopProfile,
         summaryCards: [
-          { label: 'လက်ကျန် ငွေသားစုစုပေါင်း', value: `${formatKs(totalCashBalance)} Ks`, note: formatLakh(totalCashBalance) },
-          { label: 'လက်ကျန် Wallet စုစုပေါင်း', value: `${formatKs(totalWalletBalance)} Ks`, note: formatLakh(totalWalletBalance) },
-          { label: 'စုစုပေါင်း လုပ်ငန်းလက်ကျန်', value: `${formatKs(grandTotalBalance)} Ks`, note: formatLakh(grandTotalBalance) },
-          { label: 'စုစုပေါင်း ကော်မရှင်ရငွေ', value: `+${formatKs(totalCommission)} Ks`, note: `စာရင်း ${sortedTransactions.length} ခု` },
+          { label: 'လက်ကျန် ငွေသားစုစုပေါင်း', value: `${formatKs(totalCashBalance)}`, note: formatLakh(totalCashBalance) },
+          { label: 'လက်ကျန် Wallet စုစုပေါင်း', value: `${formatKs(totalWalletBalance)}`, note: formatLakh(totalWalletBalance) },
+          { label: 'စုစုပေါင်း လုပ်ငန်းလက်ကျန်', value: `${formatKs(grandTotalBalance)}`, note: formatLakh(grandTotalBalance) },
+          { label: 'စုစုပေါင်း ကော်မရှင်ရငွေ', value: `+${formatKs(totalCommission)}`, note: `စာရင်း ${sortedTransactions.length} ခု` },
         ],
         tableHeaders: headersList,
         tableRows: rows,
@@ -255,9 +255,9 @@ export const TotalAccountsReportModal: React.FC<TotalAccountsReportModalProps> =
       '',
       '',
       '',
-      ...cashAccountTotals.map((c) => `${c > 0 ? '+' : ''}${formatKs(c)} Ks`),
-      ...walletTotals.map((w) => `${w > 0 ? '+' : ''}${formatKs(w)} Ks`),
-      `+${formatKs(totalCommission)} Ks`,
+      ...cashAccountTotals.map((c) => `${c > 0 ? '+' : ''}${formatKs(c)}`),
+      ...walletTotals.map((w) => `${w > 0 ? '+' : ''}${formatKs(w)}`),
+      `+${formatKs(totalCommission)}`,
       '',
       '',
     ];
@@ -267,10 +267,10 @@ export const TotalAccountsReportModal: React.FC<TotalAccountsReportModalProps> =
       subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
       shopProfile,
       summaryCards: [
-        { label: 'လက်ကျန် ငွေသားစုစုပေါင်း', value: `${formatKs(totalCashBalance)} Ks`, note: formatLakh(totalCashBalance) },
-        { label: 'လက်ကျန် Wallet စုစုပေါင်း', value: `${formatKs(totalWalletBalance)} Ks`, note: formatLakh(totalWalletBalance) },
-        { label: 'စုစုပေါင်း လုပ်ငန်းလက်ကျန်', value: `${formatKs(grandTotalBalance)} Ks`, note: formatLakh(grandTotalBalance) },
-        { label: 'စုစုပေါင်း ကော်မရှင်ရငွေ', value: `+${formatKs(totalCommission)} Ks`, note: `စာရင်း ${sortedTransactions.length} ခု` },
+        { label: 'လက်ကျန် ငွေသားစုစုပေါင်း', value: `${formatKs(totalCashBalance)}`, note: formatLakh(totalCashBalance) },
+        { label: 'လက်ကျန် Wallet စုစုပေါင်း', value: `${formatKs(totalWalletBalance)}`, note: formatLakh(totalWalletBalance) },
+        { label: 'စုစုပေါင်း လုပ်ငန်းလက်ကျန်', value: `${formatKs(grandTotalBalance)}`, note: formatLakh(grandTotalBalance) },
+        { label: 'စုစုပေါင်း ကော်မရှင်ရငွေ', value: `+${formatKs(totalCommission)}`, note: `စာရင်း ${sortedTransactions.length} ခု` },
       ],
       tableHeaders: headersList,
       tableRows: rows,
@@ -552,7 +552,7 @@ export const TotalAccountsReportModal: React.FC<TotalAccountsReportModalProps> =
 
                         {item.commission > 0 && (
                           <span className="text-xs font-black text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800 shrink-0">
-                            +{formatKs(item.commission)} Ks
+                            +{formatKs(item.commission)}
                           </span>
                         )}
                       </div>

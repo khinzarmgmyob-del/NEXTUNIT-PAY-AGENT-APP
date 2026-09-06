@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Printer,
   FileDown,
@@ -15,9 +15,21 @@ import {
   CheckCircle2,
   RefreshCw,
   Settings,
+  Columns,
+  Check,
+  CheckSquare,
+  Square,
+  Eye,
+  EyeOff,
+  Filter,
 } from 'lucide-react';
 import { ShopProfile } from '../types';
-import { PrintReportOptions, buildReportHtmlMarkup, executeNativePrintOrPreview } from '../utils/exportAndPrint';
+import {
+  PrintReportOptions,
+  buildReportHtmlMarkup,
+  executeNativePrintOrPreview,
+  computeSummaryRowWithAllTotals,
+} from '../utils/exportAndPrint';
 import { exportToPdfNative, exportToExcelNative } from '../utils/nativeFileExporter';
 import { UNICODE_FONT_FAMILY } from '../utils/unicodeEngine';
 import {
@@ -40,6 +52,7 @@ interface PrintPreviewModalProps {
 type PaperSize = 'a4' | 'letter' | 'a5' | 'pos80';
 type Orientation = 'portrait' | 'landscape';
 type MarginSize = 'normal' | 'compact' | 'wide';
+type FontSize = 'normal' | 'compact' | 'large';
 
 export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
   isOpen,
@@ -52,7 +65,9 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
   const [paperSize, setPaperSize] = useState<PaperSize>('a4');
   const [orientation, setOrientation] = useState<Orientation>(defaultOrientation);
   const [marginSize, setMarginSize] = useState<MarginSize>('normal');
+  const [fontSize, setFontSize] = useState<FontSize>('normal');
   const [scale, setScale] = useState<number>(100);
+  const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [networkPrinter, setNetworkPrinter] = useState<NetworkPrinter>(getSavedNetworkPrinter);
@@ -61,12 +76,100 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
   const [driverNotice, setDriverNotice] = useState<{ text: string; type: 'info' | 'success' } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
+  // Column Visibility state: list of visible column indices
+  const [visibleColumnIndices, setVisibleColumnIndices] = useState<number[]>(() =>
+    reportOptions.tableHeaders ? reportOptions.tableHeaders.map((_, i) => i) : []
+  );
+
+  // Re-sync when table headers change
+  useEffect(() => {
+    if (reportOptions.tableHeaders) {
+      setVisibleColumnIndices(reportOptions.tableHeaders.map((_, i) => i));
+    }
+  }, [reportOptions.tableHeaders]);
+
   useEffect(() => {
     if (isOpen) {
       const saved = getSavedNetworkPrinter();
       setNetworkPrinter(saved);
     }
   }, [isOpen]);
+
+  // Quick toggle a column index
+  const toggleColumn = (index: number) => {
+    if (visibleColumnIndices.includes(index)) {
+      if (visibleColumnIndices.length <= 1) return; // keep at least 1 column
+      setVisibleColumnIndices((prev) => prev.filter((i) => i !== index));
+    } else {
+      setVisibleColumnIndices((prev) => [...prev, index].sort((a, b) => a - b));
+    }
+  };
+
+  // Select all columns
+  const selectAllColumns = () => {
+    setVisibleColumnIndices(reportOptions.tableHeaders.map((_, i) => i));
+  };
+
+  // Select essential core financial columns preset
+  const selectEssentialColumns = () => {
+    const essential = reportOptions.tableHeaders
+      .map((header, idx) => {
+        if (idx === 0) return idx; // No.
+        const h = header.toLowerCase();
+        if (
+          h.includes('ရက်စွဲ') ||
+          h.includes('date') ||
+          h.includes('ဖောက်သည်') ||
+          h.includes('customer') ||
+          h.includes('အမျိုးအစား') ||
+          h.includes('type') ||
+          h.includes('လက်ငင်း') ||
+          h.includes('actual') ||
+          h.includes('မူလငွေ') ||
+          h.includes('amount') ||
+          h.includes('ကော်မရှင်') ||
+          h.includes('comm') ||
+          h.includes('ဝေါလက်') ||
+          h.includes('wallet') ||
+          h.includes('လက်ကျန်') ||
+          h.includes('balance')
+        ) {
+          return idx;
+        }
+        return -1;
+      })
+      .filter((idx) => idx !== -1);
+
+    if (essential.length > 0) {
+      setVisibleColumnIndices(essential);
+    } else {
+      selectAllColumns();
+    }
+  };
+
+  // Derived filtered data respecting visible column selections
+  const effectiveHeaders = useMemo(() => {
+    return reportOptions.tableHeaders.filter((_, idx) => visibleColumnIndices.includes(idx));
+  }, [reportOptions.tableHeaders, visibleColumnIndices]);
+
+  const effectiveRows = useMemo(() => {
+    return reportOptions.tableRows.map((row) =>
+      row.filter((_, idx) => visibleColumnIndices.includes(idx))
+    );
+  }, [reportOptions.tableRows, visibleColumnIndices]);
+
+  const effectiveAligns = useMemo(() => {
+    if (!reportOptions.columnAligns) return undefined;
+    return reportOptions.columnAligns.filter((_, idx) => visibleColumnIndices.includes(idx));
+  }, [reportOptions.columnAligns, visibleColumnIndices]);
+
+  // Dynamically compute totals for all numeric/amount columns
+  const effectiveSummaryRow = useMemo(() => {
+    const filteredBaseSummary = reportOptions.summaryRow
+      ? reportOptions.summaryRow.filter((_, idx) => visibleColumnIndices.includes(idx))
+      : undefined;
+    return computeSummaryRowWithAllTotals(effectiveHeaders, effectiveRows, filteredBaseSummary);
+  }, [effectiveHeaders, effectiveRows, reportOptions.summaryRow, visibleColumnIndices]);
 
   // Quick auto-detect local network printers
   const handleQuickAutoDetect = async () => {
@@ -117,16 +220,22 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
       case 'compact':
         return '6mm 8mm';
       case 'wide':
-        return '16mm 20mm';
+        return '18mm 22mm';
       default:
-        return '8mm 12mm';
+        return '10mm 14mm';
     }
   };
 
-  // Generate customized HTML markup
+  // Generate customized HTML markup using filtered columns, responsive margins & font scaling
   const htmlContent = buildReportHtmlMarkup({
     ...reportOptions,
+    tableHeaders: effectiveHeaders,
+    tableRows: effectiveRows,
+    summaryRow: effectiveSummaryRow,
+    columnAligns: effectiveAligns,
     orientation,
+    fontSize,
+    marginSize,
   });
 
   const [isPrintingWithDriver, setIsPrintingWithDriver] = useState(false);
@@ -183,12 +292,10 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
         width: 100% !important;
         max-width: 100% !important;
         table-layout: auto !important;
-        word-wrap: break-word !important;
-        font-size: ${orientation === 'landscape' ? '8.5pt' : '9.5pt'} !important;
+        box-sizing: border-box !important;
       }
       th, td {
         border: 1px solid #94a3b8 !important;
-        padding: 3px 5px !important;
       }
       tr {
         page-break-inside: avoid !important;
@@ -248,13 +355,19 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
     }
   };
 
-  // PDF Download Handler
+  // PDF Download Handler - Respects hidden columns, margin, font scale and computed totals
   const handleDownloadPdf = async () => {
     setIsExportingPdf(true);
     try {
       await exportToPdfNative({
         ...reportOptions,
+        tableHeaders: effectiveHeaders,
+        tableRows: effectiveRows,
+        summaryRow: effectiveSummaryRow,
+        columnAligns: effectiveAligns,
         orientation,
+        fontSize,
+        marginSize,
         filename: reportOptions.filename || `${reportOptions.title.replace(/\s+/g, '_')}_${Date.now()}.pdf`,
       });
     } catch (err: any) {
@@ -265,7 +378,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
     }
   };
 
-  // Excel Download Handler
+  // Excel Download Handler - Respects hidden columns and computed totals
   const handleDownloadExcel = async () => {
     setIsExportingExcel(true);
     try {
@@ -274,9 +387,9 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
           ? reportOptions.filename.replace(/\.pdf$/i, '.xlsx')
           : `${reportOptions.title.replace(/\s+/g, '_')}_${Date.now()}.xlsx`,
         sheetName: 'Report',
-        headers: reportOptions.tableHeaders,
-        rows: reportOptions.tableRows,
-        summaryRow: reportOptions.summaryRow,
+        headers: effectiveHeaders,
+        rows: effectiveRows,
+        summaryRow: effectiveSummaryRow,
       });
     } catch (err: any) {
       console.error('Excel error:', err);
@@ -313,7 +426,101 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
         </div>
 
         {/* PAGE SETUP SETTINGS CONTROLS */}
-        <div className="flex flex-wrap items-center gap-2 bg-slate-50 dark:bg-slate-800/80 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+        <div className="flex flex-wrap items-center gap-2 bg-slate-50 dark:bg-slate-800/80 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 relative">
+          {/* Column Selector Toggle Button */}
+          <div className="relative">
+            <button
+              onClick={() => setIsColumnPickerOpen((v) => !v)}
+              className={`px-2.5 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer border ${
+                isColumnPickerOpen || visibleColumnIndices.length < reportOptions.tableHeaders.length
+                  ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm'
+                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+              title="မလိုသော ကော်လံများကို ဖျောက်/ပြ ရွေးချယ်မည်"
+            >
+              <Columns className="w-3.5 h-3.5" />
+              <span>ကော်လံများ ({visibleColumnIndices.length}/{reportOptions.tableHeaders.length})</span>
+            </button>
+
+            {/* Column Picker Flyout Panel */}
+            {isColumnPickerOpen && (
+              <div 
+                className="absolute top-full left-0 mt-2 z-50 w-72 sm:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-3 animate-in fade-in zoom-in-95 duration-100"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 mb-2.5">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-slate-100 text-xs">
+                    <Filter className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>ပုံနှိပ်/ထုတ်ယူမည့် ကော်လံများ</span>
+                  </div>
+                  <button
+                    onClick={() => setIsColumnPickerOpen(false)}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Preset Buttons */}
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <button
+                    onClick={selectAllColumns}
+                    className="flex-1 py-1 px-2 text-[11px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg transition-colors cursor-pointer text-center"
+                  >
+                    အားလုံးပြမည်
+                  </button>
+                  <button
+                    onClick={selectEssentialColumns}
+                    className="flex-1 py-1 px-2 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-lg transition-colors cursor-pointer text-center"
+                    title="အဓိက ငွေစာရင်း ကော်လံများကိုသာ အကျဉ်းချုံး ပြမည်"
+                  >
+                    အဓိက (Compact)
+                  </button>
+                </div>
+
+                {/* Column Checklist */}
+                <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+                  {reportOptions.tableHeaders.map((header, idx) => {
+                    const isChecked = visibleColumnIndices.includes(idx);
+                    return (
+                      <label
+                        key={idx}
+                        className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs select-none transition-colors ${
+                          isChecked
+                            ? 'bg-indigo-50/60 dark:bg-indigo-950/40 text-slate-900 dark:text-slate-100 font-semibold'
+                            : 'text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleColumn(idx)}
+                          className="w-3.5 h-3.5 rounded text-indigo-600 accent-indigo-600 cursor-pointer"
+                        />
+                        <span className="truncate flex-1" title={header}>
+                          {header}
+                        </span>
+                        {isChecked && (
+                          <Eye className="w-3 h-3 text-indigo-500 shrink-0" />
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500">
+                  <span>ရွေးချယ်ထား: {visibleColumnIndices.length} ခု</span>
+                  <button
+                    onClick={() => setIsColumnPickerOpen(false)}
+                    className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+                  >
+                    အိုကေ (Done)
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Paper Size */}
           <div className="flex items-center gap-1">
             <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 pl-1">Size:</span>
@@ -326,6 +533,21 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
               <option value="letter">📄 Letter</option>
               <option value="a5">📄 A5</option>
               <option value="pos80">🧾 80mm POS Slip</option>
+            </select>
+          </div>
+
+          {/* Font / Text Size */}
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Font:</span>
+            <select
+              value={fontSize}
+              onChange={(e) => setFontSize(e.target.value as FontSize)}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none"
+              title="စာလုံးနှင့် ဇယား အရွယ်အစား ချိန်ညှိရန်"
+            >
+              <option value="compact">သေး (Compact)</option>
+              <option value="normal">ပုံမှန် (Normal)</option>
+              <option value="large">ကြီး (Large)</option>
             </select>
           </div>
 
@@ -351,6 +573,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
               value={marginSize}
               onChange={(e) => setMarginSize(e.target.value as MarginSize)}
               className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none"
+              title="ဘေးဘောင် Margin အကျဉ်း/အကျယ် ချိန်ညှိရန်"
             >
               <option value="compact">ကျဉ်း (Compact 8mm)</option>
               <option value="normal">ပုံမှန် (Normal 14mm)</option>
@@ -396,6 +619,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
             onClick={handleDownloadPdf}
             disabled={isExportingPdf}
             className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-rose-600/20 transition-all cursor-pointer disabled:opacity-50"
+            title="လက်ရှိ ကော်လံနှင့် အနေအထားအတိုင်း PDF ထုတ်မည်"
           >
             <FileDown className="w-4 h-4" />
             <span>{isExportingPdf ? 'PDF ဖန်တီးနေ...' : 'PDF ဒေါင်းမည်'}</span>
@@ -406,6 +630,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
             onClick={handleDownloadExcel}
             disabled={isExportingExcel}
             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
+            title="လက်ရှိ ကော်လံနှင့် အနေအထားအတိုင်း Excel ထုတ်မည်"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>{isExportingExcel ? 'Excel ထုတ်နေ...' : 'Excel (.xlsx)'}</span>

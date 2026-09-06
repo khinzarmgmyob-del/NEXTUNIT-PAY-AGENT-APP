@@ -488,8 +488,8 @@ export default function App() {
       'အချိန် (Time)',
       'ဖောက်သည်အမည် (Customer)',
       'အမျိုးအစား (Type)',
-      'လက်ငင်းပေး/ရငွေ (Actual Ks)',
-      'မူလလွှဲငွေ (Original Ks)',
+      'လက်ငင်းပေး/ရငွေ (Actual)',
+      'မူလလွှဲငွေ (Amount)',
       'ငွေသားကော်မရှင် (Cash Comm)',
       'Walletကော်မရှင် (Wallet Comm)',
       'စုစုပေါင်းကော်မရှင် (Total Comm)',
@@ -553,11 +553,11 @@ export default function App() {
         item.time || '-',
         item.customerName,
         item.type,
-        `${actualCash.toLocaleString()} Ks`,
-        `${item.amount.toLocaleString()} Ks`,
-        cComm > 0 ? `+${cComm.toLocaleString()} Ks` : '-',
-        wComm > 0 ? `+${wComm.toLocaleString()} Ks` : '-',
-        `+${(cComm + wComm).toLocaleString()} Ks`,
+        actualCash.toLocaleString('en-US'),
+        item.amount.toLocaleString('en-US'),
+        cComm > 0 ? `+${cComm.toLocaleString('en-US')}` : '-',
+        wComm > 0 ? `+${wComm.toLocaleString('en-US')}` : '-',
+        `+${(cComm + wComm).toLocaleString('en-US')}`,
         item.commissionMode === 'deduct' ? 'မူလငွေမှနုတ်' : 'သီးသန့်ပေး',
         item.phone || '-',
         item.walletName,
@@ -574,11 +574,11 @@ export default function App() {
       '',
       '',
       '',
-      `${sumNet >= 0 ? '+' : '-'}${Math.abs(sumNet).toLocaleString()} Ks`,
-      `${(sumIn + sumOut + sumTransfer).toLocaleString()} Ks`,
-      `+${sumCashComm.toLocaleString()} Ks`,
-      `+${sumWalletComm.toLocaleString()} Ks`,
-      `+${(sumCashComm + sumWalletComm).toLocaleString()} Ks`,
+      `${sumNet >= 0 ? '+' : '-'}${Math.abs(sumNet).toLocaleString('en-US')}`,
+      (sumIn + sumOut + sumTransfer).toLocaleString('en-US'),
+      `+${sumCashComm.toLocaleString('en-US')}`,
+      `+${sumWalletComm.toLocaleString('en-US')}`,
+      `+${(sumCashComm + sumWalletComm).toLocaleString('en-US')}`,
       '',
       '',
       '',
@@ -599,10 +599,10 @@ export default function App() {
       title,
       subtitle,
       summaryCards: [
-        { label: 'ငွေသွင်း (Cash In)', value: `+${formatKs(sumIn)} Ks`, note: 'လက်ငင်းငွေသားဝင်' },
-        { label: 'ငွေထုတ် (Cash Out)', value: `-${formatKs(sumOut)} Ks`, note: 'လက်ငင်းငွေသားထုတ်' },
-        { label: 'ကော်မရှင်စုစုပေါင်း', value: `+${formatKs(sumCashComm + sumWalletComm)} Ks`, note: `Cash:${formatKs(sumCashComm)} | W:${formatKs(sumWalletComm)}` },
-        { label: 'စာရင်း အရေအတွက်', value: `${dataset.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(sumTransfer)} Ks` },
+        { label: 'ငွေသွင်း (Cash In)', value: `+${formatKs(sumIn)}`, note: 'လက်ငင်းငွေသားဝင်' },
+        { label: 'ငွေထုတ် (Cash Out)', value: `-${formatKs(sumOut)}`, note: 'လက်ငင်းငွေသားထုတ်' },
+        { label: 'ကော်မရှင်စုစုပေါင်း', value: `+${formatKs(sumCashComm + sumWalletComm)}`, note: `Cash:${formatKs(sumCashComm)} | W:${formatKs(sumWalletComm)}` },
+        { label: 'စာရင်း အရေအတွက်', value: `${dataset.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(sumTransfer)}` },
       ],
     };
   };
@@ -1645,8 +1645,8 @@ export default function App() {
                               {isTransfer
                                 ? formatKs(item.amount)
                                 : isCashOut
-                                ? `- ${actualCash.toLocaleString()} Ks`
-                                : `+ ${actualCash.toLocaleString()} Ks`}
+                                ? `- ${actualCash.toLocaleString('en-US')}`
+                                : `+ ${actualCash.toLocaleString('en-US')}`}
                             </span>
                           </div>
 
@@ -1655,21 +1655,21 @@ export default function App() {
                               {isTransfer ? 'လွှဲခ/ဝန်ဆောင်ခ:' : 'မူလလွှဲငွေ:'}
                             </span>
                             <span className="font-semibold text-slate-700 dark:text-slate-300">
-                              {isTransfer ? `+${formatKs(item.commission)}` : `${item.amount.toLocaleString()} Ks`}
+                              {isTransfer ? `+${formatKs(item.commission)}` : item.amount.toLocaleString('en-US')}
                             </span>
                           </div>
 
                           <div>
                             <span className="text-[10px] text-amber-700 dark:text-amber-400 font-bold block">💵 ငွေသားကော်မရှင်:</span>
                             <span className="font-bold text-amber-700 dark:text-amber-400">
-                              {cashComm > 0 ? `+${cashComm.toLocaleString()} Ks` : '-'}
+                              {cashComm > 0 ? `+${cashComm.toLocaleString('en-US')}` : '-'}
                             </span>
                           </div>
 
                           <div>
                             <span className="text-[10px] text-purple-700 dark:text-purple-400 font-bold block">📱 Walletကော်မရှင်:</span>
                             <span className="font-bold text-purple-700 dark:text-purple-400">
-                              {walletComm > 0 ? `+${walletComm.toLocaleString()} Ks` : '-'}
+                              {walletComm > 0 ? `+${walletComm.toLocaleString('en-US')}` : '-'}
                             </span>
                           </div>
                         </div>
@@ -1712,34 +1712,34 @@ export default function App() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-slate-400">စုစုပေါင်း Amount ပေါင်း (Total Volume):</span>
-                      <span className="font-black text-indigo-300 text-sm">{formatKs(mainTotalAmount)} Ks</span>
+                      <span className="font-black text-indigo-300 text-sm">{formatKs(mainTotalAmount)}</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
                     <div className="bg-white/5 p-2 rounded-lg border border-white/10">
                       <span className="text-[10px] text-emerald-300 block">📥 စုစုပေါင်း ငွေသွင်း Amount:</span>
-                      <span className="font-black text-emerald-400">+{formatKs(mainTotalIn)} Ks</span>
+                      <span className="font-black text-emerald-400">+{formatKs(mainTotalIn)}</span>
                     </div>
                     <div className="bg-white/5 p-2 rounded-lg border border-white/10">
                       <span className="text-[10px] text-rose-300 block">📤 စုစုပေါင်း ငွေထုတ် Amount:</span>
-                      <span className="font-black text-rose-400">-{formatKs(mainTotalOut)} Ks</span>
+                      <span className="font-black text-rose-400">-{formatKs(mainTotalOut)}</span>
                     </div>
                     <div className="bg-white/5 p-2 rounded-lg border border-white/10">
                       <span className="text-[10px] text-sky-300 block">🔄 စုစုပေါင်း လွှဲပြောင်း Amount:</span>
-                      <span className="font-black text-sky-400">{formatKs(mainTotalTransfer)} Ks</span>
+                      <span className="font-black text-sky-400">{formatKs(mainTotalTransfer)}</span>
                     </div>
                     <div className="bg-white/5 p-2 rounded-lg border border-white/10">
                       <span className="text-[10px] text-amber-300 block">💵 ငွေသား ကော်မရှင်:</span>
-                      <span className="font-bold text-amber-300">+{formatKs(mainTotalCashComm)} Ks</span>
+                      <span className="font-bold text-amber-300">+{formatKs(mainTotalCashComm)}</span>
                     </div>
                     <div className="bg-white/5 p-2 rounded-lg border border-white/10">
                       <span className="text-[10px] text-purple-300 block">📱 Wallet ကော်မရှင်:</span>
-                      <span className="font-bold text-purple-300">+{formatKs(mainTotalWalletComm)} Ks</span>
+                      <span className="font-bold text-purple-300">+{formatKs(mainTotalWalletComm)}</span>
                     </div>
                     <div className="bg-indigo-950/90 p-2 rounded-lg border border-indigo-500/40">
                       <span className="text-[10px] text-emerald-300 font-bold block">✨ စုစုပေါင်း ကော်မရှင်:</span>
-                      <span className="font-black text-emerald-300">+{formatKs(mainGrandTotalComm)} Ks</span>
+                      <span className="font-black text-emerald-300">+{formatKs(mainGrandTotalComm)}</span>
                     </div>
                   </div>
                 </div>
@@ -1854,19 +1854,19 @@ export default function App() {
                               {isTransfer
                                 ? formatKs(item.amount)
                                 : isCashOut
-                                ? `- ${actualCash.toLocaleString()}`
-                                : `+ ${actualCash.toLocaleString()}`} Ks
+                                ? `- ${actualCash.toLocaleString('en-US')}`
+                                : `+ ${actualCash.toLocaleString('en-US')}`}
                             </div>
                           </td>
 
                           {/* Cash Commission */}
                           <td className="p-3 text-right text-amber-800 dark:text-amber-300 font-bold whitespace-nowrap bg-amber-50/30 dark:bg-amber-950/20">
-                            {cashComm > 0 ? `+${cashComm.toLocaleString()} Ks` : '-'}
+                            {cashComm > 0 ? `+${cashComm.toLocaleString('en-US')}` : '-'}
                           </td>
 
                           {/* Wallet Commission */}
                           <td className="p-3 text-right text-purple-800 dark:text-purple-300 font-bold whitespace-nowrap bg-purple-50/30 dark:bg-purple-950/20">
-                            {walletComm > 0 ? `+${walletComm.toLocaleString()} Ks` : '-'}
+                            {walletComm > 0 ? `+${walletComm.toLocaleString('en-US')}` : '-'}
                           </td>
 
                           <td className="p-3 text-slate-600 dark:text-slate-400 font-mono whitespace-nowrap">{item.phone}</td>
@@ -1913,23 +1913,23 @@ export default function App() {
                       </td>
                       <td className="p-2.5 text-right whitespace-nowrap">
                         <div className="text-xs font-black text-slate-900 dark:text-slate-100">
-                          {formatKs(mainTotalAmount)} Ks
+                          {formatKs(mainTotalAmount)}
                         </div>
                         <div className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
                           (သွင်း: +{formatKs(mainTotalIn)} | ထုတ်: -{formatKs(mainTotalOut)} | လွှဲ: {formatKs(mainTotalTransfer)})
                         </div>
                         <div className={`text-[10px] font-bold ${mainNetCash >= 0 ? 'text-indigo-700 dark:text-indigo-400' : 'text-red-600 dark:text-red-400'}`}>
-                          ငွေသားစီးဆင်းမှု: {mainNetCash >= 0 ? `+${formatKs(mainNetCash)}` : `-${formatKs(Math.abs(mainNetCash))}`} Ks
+                          ငွေသားစီးဆင်းမှု: {mainNetCash >= 0 ? `+${formatKs(mainNetCash)}` : `-${formatKs(Math.abs(mainNetCash))}`}
                         </div>
                       </td>
                       <td className="p-2.5 text-right whitespace-nowrap text-amber-800 dark:text-amber-300 bg-amber-100/50 dark:bg-amber-950/30 font-black">
-                        +{formatKs(mainTotalCashComm)} Ks
+                        +{formatKs(mainTotalCashComm)}
                       </td>
                       <td className="p-2.5 text-right whitespace-nowrap text-purple-800 dark:text-purple-300 bg-purple-100/50 dark:bg-purple-950/30 font-black">
-                        +{formatKs(mainTotalWalletComm)} Ks
+                        +{formatKs(mainTotalWalletComm)}
                       </td>
                       <td colSpan={4} className="p-2.5 whitespace-nowrap text-indigo-950 dark:text-indigo-200">
-                        👉 စုစုပေါင်း ကော်မရှင်: <b className="text-emerald-600 dark:text-emerald-400 text-xs">+{formatKs(mainGrandTotalComm)} Ks</b>
+                        👉 စုစုပေါင်း ကော်မရှင်: <b className="text-emerald-600 dark:text-emerald-400 text-xs">+{formatKs(mainGrandTotalComm)}</b>
                       </td>
                     </tr>
                   </tfoot>

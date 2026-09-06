@@ -347,7 +347,7 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
       if (idx === 0) return 'စုစုပေါင်း';
       const num = Number(val);
       if (isNaN(num)) return String(val);
-      return `${num > 0 ? '+' : ''}${formatKs(num)} Ks`;
+      return `${num > 0 ? '+' : ''}${formatKs(num)}`;
     });
 
     printFormattedReport({
@@ -355,9 +355,9 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
       subtitle: `လ: ${selectedMonth} | ဆိုင်အမည်: ${shopProfile?.shopName || 'Money Agent POS'}`,
       shopProfile,
       summaryCards: [
-        { label: 'လစဉ် စုစုပေါင်း ဝင်ငွေ (+)', value: `+${formatKs(grandTotals.totalIn)} Ks`, note: 'Cash & Wallet In' },
-        { label: 'လစဉ် စုစုပေါင်း ထွက်ငွေ (-)', value: `-${formatKs(grandTotals.totalOut)} Ks`, note: 'Cash & Wallet Out' },
-        { label: 'လစဉ် အသားတင် ငွေစီးဆင်းမှု', value: `${grandTotals.netFlow >= 0 ? '+' : ''}${formatKs(grandTotals.netFlow)} Ks`, note: 'Net Monthly Flow' },
+        { label: 'လစဉ် စုစုပေါင်း ဝင်ငွေ (+)', value: `+${formatKs(grandTotals.totalIn)}`, note: 'Cash & Wallet In' },
+        { label: 'လစဉ် စုစုပေါင်း ထွက်ငွေ (-)', value: `-${formatKs(grandTotals.totalOut)}`, note: 'Cash & Wallet Out' },
+        { label: 'လစဉ် အသားတင် ငွေစီးဆင်းမှု', value: `${grandTotals.netFlow >= 0 ? '+' : ''}${formatKs(grandTotals.netFlow)}`, note: 'Net Monthly Flow' },
         { label: 'လှုပ်ရှားမှုရှိသော ရက်ပေါင်း', value: `${dailyRows.length} ရက်`, note: `${selectedMonth}` },
       ],
       tableHeaders: headers,
@@ -387,7 +387,7 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
         if (idx === 0) return 'စုစုပေါင်း';
         const num = Number(val);
         if (isNaN(num)) return String(val);
-        return `${num > 0 ? '+' : ''}${formatKs(num)} Ks`;
+        return `${num > 0 ? '+' : ''}${formatKs(num)}`;
       });
 
       await exportReportToPdfAndShare({
@@ -395,9 +395,9 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
         subtitle: `လ: ${selectedMonth} | ဆိုင်အမည်: ${shopProfile?.shopName || 'Money Agent POS'}`,
         shopProfile,
         summaryCards: [
-          { label: 'လစဉ် စုစုပေါင်း ဝင်ငွေ (+)', value: `+${formatKs(grandTotals.totalIn)} Ks`, note: 'Cash & Wallet In' },
-          { label: 'လစဉ် စုစုပေါင်း ထွက်ငွေ (-)', value: `-${formatKs(grandTotals.totalOut)} Ks`, note: 'Cash & Wallet Out' },
-          { label: 'လစဉ် အသားတင် ငွေစီးဆင်းမှု', value: `${grandTotals.netFlow >= 0 ? '+' : ''}${formatKs(grandTotals.netFlow)} Ks`, note: 'Net Monthly Flow' },
+          { label: 'လစဉ် စုစုပေါင်း ဝင်ငွေ (+)', value: `+${formatKs(grandTotals.totalIn)}`, note: 'Cash & Wallet In' },
+          { label: 'လစဉ် စုစုပေါင်း ထွက်ငွေ (-)', value: `-${formatKs(grandTotals.totalOut)}`, note: 'Cash & Wallet Out' },
+          { label: 'လစဉ် အသားတင် ငွေစီးဆင်းမှု', value: `${grandTotals.netFlow >= 0 ? '+' : ''}${formatKs(grandTotals.netFlow)}`, note: 'Net Monthly Flow' },
           { label: 'လှုပ်ရှားမှုရှိသော ရက်ပေါင်း', value: `${dailyRows.length} ရက်`, note: `${selectedMonth}` },
         ],
         tableHeaders: headers,
@@ -820,8 +820,8 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
                     }`}
                   >
                     {grandTotals.netFlow >= 0
-                      ? `+${grandTotals.netFlow.toLocaleString('en-US')} Ks`
-                      : `-${Math.abs(grandTotals.netFlow).toLocaleString('en-US')} Ks`}
+                      ? `+${grandTotals.netFlow.toLocaleString('en-US')}`
+                      : `-${Math.abs(grandTotals.netFlow).toLocaleString('en-US')}`}
                   </strong>
                 </span>
               </div>

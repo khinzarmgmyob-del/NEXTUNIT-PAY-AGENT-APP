@@ -190,8 +190,8 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     'အချိန် (Time)',
     'ဖောက်သည်အမည် (Customer)',
     'အမျိုးအစား (Type)',
-    'လက်ငင်းပေး/ရငွေ (Actual Ks)',
-    'မူလလွှဲငွေ (Original Ks)',
+    'လက်ငင်းပေး/ရငွေ (Actual)',
+    'မူလလွှဲငွေ (Amount)',
     'ငွေသားကော်မရှင် (Cash Comm)',
     'Walletကော်မရှင် (Wallet Comm)',
     'စုစုပေါင်းကော်မရှင် (Total Comm)',
@@ -219,16 +219,16 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         : 'ငွေသား ကော်မရှင်';
 
       const formattedActualCash = isTransfer
-        ? `${formatKs(d.amount)} Ks`
+        ? formatKs(d.amount)
         : isCashOut
-        ? `-${formatKs(actualCash)} Ks`
-        : `+${formatKs(actualCash)} Ks`;
+        ? `-${formatKs(actualCash)}`
+        : `+${formatKs(actualCash)}`;
 
       const formattedOriginalAmount = isTransfer
-        ? `${formatKs(d.amount)} Ks`
+        ? formatKs(d.amount)
         : isCashOut
-        ? `-${formatKs(d.amount)} Ks`
-        : `+${formatKs(d.amount)} Ks`;
+        ? `-${formatKs(d.amount)}`
+        : `+${formatKs(d.amount)}`;
 
       return [
         index + 1,
@@ -238,9 +238,9 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         d.type,
         formattedActualCash,
         formattedOriginalAmount,
-        cashComm > 0 ? `+${formatKs(cashComm)} Ks` : '-',
-        walletComm > 0 ? `+${formatKs(walletComm)} Ks` : '-',
-        d.commission > 0 ? `+${formatKs(d.commission)} Ks` : '-',
+        cashComm > 0 ? `+${formatKs(cashComm)}` : '-',
+        walletComm > 0 ? `+${formatKs(walletComm)}` : '-',
+        d.commission > 0 ? `+${formatKs(d.commission)}` : '-',
         commModeLabel,
         d.phone || '-',
         d.walletName,
@@ -264,11 +264,11 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       '',
       '',
       '',
-      `${netAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netAmount))} Ks`,
-      `${netOriginalAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netOriginalAmount))} Ks`,
-      `+${formatKs(totalCashComm)} Ks`,
-      `+${formatKs(totalWalletComm)} Ks`,
-      `+${formatKs(grandTotalComm)} Ks`,
+      `${netAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netAmount))}`,
+      `${netOriginalAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netOriginalAmount))}`,
+      `+${formatKs(totalCashComm)}`,
+      `+${formatKs(totalWalletComm)}`,
+      `+${formatKs(grandTotalComm)}`,
       '',
       '',
       '',
@@ -328,11 +328,11 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         '',
         '',
         '',
-        `${netAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netAmount))} Ks`,
-        `${netOriginalAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netOriginalAmount))} Ks`,
-        `+${formatKs(totalCashComm)} Ks`,
-        `+${formatKs(totalWalletComm)} Ks`,
-        `+${formatKs(grandTotalComm)} Ks`,
+        `${netAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netAmount))}`,
+        `${netOriginalAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netOriginalAmount))}`,
+        `+${formatKs(totalCashComm)}`,
+        `+${formatKs(totalWalletComm)}`,
+        `+${formatKs(grandTotalComm)}`,
         '',
         '',
         '',
@@ -347,10 +347,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
         shopProfile,
         summaryCards: [
-          { label: 'ငွေသွင်း (Cash In)', value: `+${formatKs(totalIn)} Ks`, note: 'လက်ငင်းငွေသားဝင်' },
-          { label: 'ငွေထုတ် (Cash Out)', value: `-${formatKs(totalOut)} Ks`, note: 'လက်ငင်းငွေသားထုတ်' },
-          { label: 'ကော်မရှင်ရငွေ', value: `+${formatKs(grandTotalComm)} Ks`, note: `Cash:${formatKs(totalCashComm)} | W:${formatKs(totalWalletComm)}` },
-          { label: 'စာရင်း အရေအတွက်', value: `${filteredData.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(totalTransferVolume)} Ks` },
+          { label: 'ငွေသွင်း (Cash In)', value: `+${formatKs(totalIn)}`, note: 'လက်ငင်းငွေသားဝင်' },
+          { label: 'ငွေထုတ် (Cash Out)', value: `-${formatKs(totalOut)}`, note: 'လက်ငင်းငွေသားထုတ်' },
+          { label: 'ကော်မရှင်ရငွေ', value: `+${formatKs(grandTotalComm)}`, note: `Cash:${formatKs(totalCashComm)} | W:${formatKs(totalWalletComm)}` },
+          { label: 'စာရင်း အရေအတွက်', value: `${filteredData.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(totalTransferVolume)}` },
         ],
         tableHeaders: headersList,
         tableRows: rows,
@@ -1039,10 +1039,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
             shopProfile,
             summaryCards: [
-              { label: 'ငွေသွင်း (Cash In)', value: `+${formatKs(totalIn)} Ks`, note: 'လက်ငင်းငွေသားဝင်' },
-              { label: 'ငွေထုတ် (Cash Out)', value: `-${formatKs(totalOut)} Ks`, note: 'လက်ငင်းငွေသားထုတ်' },
-              { label: 'ကော်မရှင်ရငွေ', value: `+${formatKs(grandTotalComm)} Ks`, note: `Cash:${formatKs(totalCashComm)} | W:${formatKs(totalWalletComm)}` },
-              { label: 'စာရင်း အရေအတွက်', value: `${filteredData.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(totalTransferVolume)} Ks` },
+              { label: 'ငွေသွင်း (Cash In)', value: `+${formatKs(totalIn)}`, note: 'လက်ငင်းငွေသားဝင်' },
+              { label: 'ငွေထုတ် (Cash Out)', value: `-${formatKs(totalOut)}`, note: 'လက်ငင်းငွေသားထုတ်' },
+              { label: 'ကော်မရှင်ရငွေ', value: `+${formatKs(grandTotalComm)}`, note: `Cash:${formatKs(totalCashComm)} | W:${formatKs(totalWalletComm)}` },
+              { label: 'စာရင်း အရေအတွက်', value: `${filteredData.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(totalTransferVolume)}` },
             ],
             tableHeaders: headersList,
             tableRows: getReportRows(),
@@ -1052,11 +1052,11 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               '',
               '',
               '',
-              `${netAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netAmount))} Ks`,
-              `${netOriginalAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netOriginalAmount))} Ks`,
-              `+${formatKs(totalCashComm)} Ks`,
-              `+${formatKs(totalWalletComm)} Ks`,
-              `+${formatKs(grandTotalComm)} Ks`,
+              `${netAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netAmount))}`,
+              `${netOriginalAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netOriginalAmount))}`,
+              `+${formatKs(totalCashComm)}`,
+              `+${formatKs(totalWalletComm)}`,
+              `+${formatKs(grandTotalComm)}`,
               '',
               '',
               '',

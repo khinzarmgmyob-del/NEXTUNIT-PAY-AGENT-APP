@@ -14,7 +14,7 @@ export const getCurrentTimeFormatted = (): string => {
 };
 
 export const formatKs = (num: number): string => {
-  return Number(num || 0).toLocaleString('en-US') + ' Ks';
+  return Number(num || 0).toLocaleString('en-US');
 };
 
 export const formatLakh = (num: number): string => {
