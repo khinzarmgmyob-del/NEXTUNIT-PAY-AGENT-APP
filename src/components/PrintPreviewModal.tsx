@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Printer,
   FileDown,
@@ -9,11 +9,25 @@ import {
   ZoomIn,
   ZoomOut,
   Sparkles,
+  Wifi,
+  Radio,
+  Zap,
+  CheckCircle2,
+  RefreshCw,
+  Settings,
 } from 'lucide-react';
 import { ShopProfile } from '../types';
 import { PrintReportOptions, buildReportHtmlMarkup, executeNativePrintOrPreview } from '../utils/exportAndPrint';
 import { exportToPdfNative, exportToExcelNative } from '../utils/nativeFileExporter';
 import { UNICODE_FONT_FAMILY } from '../utils/unicodeEngine';
+import {
+  NetworkPrinter,
+  getSavedNetworkPrinter,
+  autoScanLocalNetwork,
+  autoRunVirtualDriver,
+  generateTestPrintHtml,
+} from '../utils/networkPrinterDriver';
+import { NetworkPrinterModal } from './NetworkPrinterModal';
 
 interface PrintPreviewModalProps {
   isOpen: boolean;
@@ -41,7 +55,39 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
   const [scale, setScale] = useState<number>(100);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [networkPrinter, setNetworkPrinter] = useState<NetworkPrinter>(getSavedNetworkPrinter);
+  const [isNetworkModalOpen, setIsNetworkModalOpen] = useState(false);
+  const [isAutoDetecting, setIsAutoDetecting] = useState(false);
+  const [driverNotice, setDriverNotice] = useState<{ text: string; type: 'info' | 'success' } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      const saved = getSavedNetworkPrinter();
+      setNetworkPrinter(saved);
+    }
+  }, [isOpen]);
+
+  // Quick auto-detect local network printers
+  const handleQuickAutoDetect = async () => {
+    setIsAutoDetecting(true);
+    setDriverNotice({ text: 'ဒေသတွင်း Wi-Fi ကွန်ရက်အတွင်း ပရင်တာများကို ရှာဖွေနေပါသည်...', type: 'info' });
+    try {
+      const found = await autoScanLocalNetwork('192.168.1');
+      if (found.length > 1) {
+        const detected = found[1];
+        setNetworkPrinter(detected);
+        setDriverNotice({ text: `Wi-Fi ပရင်တာ ${detected.name} ကို ရှာဖွေတွေ့ရှိပြီး အလိုအလျောက် ချိတ်ဆက်လိုက်ပါပြီ။`, type: 'success' });
+      } else {
+        setDriverNotice({ text: `Universal Wi-Fi Print Spooler (Mopria/AirPrint) အသင့်ဖြစ်နေပါပြီ။`, type: 'success' });
+      }
+    } catch (e) {
+      console.warn('Quick auto detect error:', e);
+    } finally {
+      setIsAutoDetecting(false);
+      setTimeout(() => setDriverNotice(null), 4000);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -83,8 +129,10 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
     orientation,
   });
 
-  // Direct Print Trigger with Page Setup CSS (100% reliable inside iframes & webviews)
-  const handlePrint = () => {
+  const [isPrintingWithDriver, setIsPrintingWithDriver] = useState(false);
+
+  // Direct Print Trigger with Page Setup CSS & Auto-Run Virtual Driver
+  const handlePrint = async () => {
     const pageSizeCss = paperSize === 'pos80' ? '80mm auto' : `${paperSize} ${orientation}`;
     const marginCss = getMarginCss();
 
@@ -168,7 +216,36 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
 </body>
 </html>`;
 
-    executeNativePrintOrPreview(fullDoc, reportOptions.title);
+    setIsPrintingWithDriver(true);
+    setDriverNotice({
+      text: `Virtual Driver အလိုအလျောက် အလုပ်လုပ်နေပါသည်... ${networkPrinter.name} သို့ Print ပို့ဆောင်နေပါသည်...`,
+      type: 'info',
+    });
+
+    try {
+      const res = await autoRunVirtualDriver(fullDoc, {
+        printer: networkPrinter,
+        paperSize,
+        orientation,
+        title: reportOptions.title,
+      });
+
+      if (res.success) {
+        setDriverNotice({
+          text: `Virtual Driver အောင်မြင်စွာ ပို့ဆောင်ပြီးပါပြီ (${networkPrinter.name})`,
+          type: 'success',
+        });
+      } else {
+        // Direct browser print fallback
+        executeNativePrintOrPreview(fullDoc, reportOptions.title);
+      }
+    } catch (err: any) {
+      console.warn('Virtual driver execution error, falling back to direct browser print:', err);
+      executeNativePrintOrPreview(fullDoc, reportOptions.title);
+    } finally {
+      setIsPrintingWithDriver(false);
+      setTimeout(() => setDriverNotice(null), 4000);
+    }
   };
 
   // PDF Download Handler
@@ -345,6 +422,85 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
         </div>
       </header>
 
+      {/* DRIVER FEEDBACK FLOATING BANNER */}
+      {driverNotice && (
+        <div
+          className={`mb-3 p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 shadow-lg transition-all animate-in fade-in slide-in-from-top-2 ${
+            driverNotice.type === 'success'
+              ? 'bg-emerald-500 text-white border-emerald-400 shadow-emerald-500/20'
+              : 'bg-indigo-600 text-white border-indigo-500 shadow-indigo-600/20'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {driverNotice.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+            ) : (
+              <RefreshCw className="w-4 h-4 shrink-0 animate-spin" />
+            )}
+            <span className="font-semibold">{driverNotice.text}</span>
+          </div>
+          <button
+            onClick={() => setDriverNotice(null)}
+            className="p-1 hover:bg-white/20 rounded-lg text-white/80 hover:text-white"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* LOCAL NETWORK WI-FI PRINTER & VIRTUAL DRIVER STATUS BAR */}
+      <div className="bg-white/95 dark:bg-slate-900/95 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-2.5 sm:px-4 shadow-md flex flex-wrap items-center justify-between gap-2.5 text-xs mb-3 backdrop-blur-xs">
+        <div className="flex items-center gap-2.5 overflow-hidden">
+          <div className="relative">
+            <div className="p-2 bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-200/60 dark:border-indigo-800/60">
+              <Wifi className="w-4 h-4" />
+            </div>
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping" />
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-900" />
+          </div>
+
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Wi-Fi ပရင်တာ:</span>
+              <span className="font-bold text-slate-900 dark:text-slate-100 truncate max-w-[200px] sm:max-w-[320px]">
+                {networkPrinter.name}
+              </span>
+              <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-md">
+                {networkPrinter.ip.includes('Local') ? 'Universal Wi-Fi' : networkPrinter.ip}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
+              <Zap className="w-3 h-3 text-amber-500" />
+              <span>Virtual Driver: Phone/Tablet Direct Auto-Run Ready (အသင့်ရှိ)</span>
+            </div>
+          </div>
+        </div>
+
+        {/* PRINTER ACTION CONTROLS */}
+        <div className="flex items-center gap-2">
+          {/* Quick Auto-Detect Button */}
+          <button
+            onClick={handleQuickAutoDetect}
+            disabled={isAutoDetecting}
+            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 active:scale-95 text-slate-700 dark:text-slate-300 font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 text-[11px]"
+            title="ဒေသတွင်း Wi-Fi ပရင်တာ အလိုအလျောက် ရှာဖွေမည်"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-indigo-500 ${isAutoDetecting ? 'animate-spin' : ''}`} />
+            <span>{isAutoDetecting ? 'ရှာဖွေနေ...' : 'Auto Detect (ရှာဖွေမည်)'}</span>
+          </button>
+
+          {/* Manage / Configure Button */}
+          <button
+            onClick={() => setIsNetworkModalOpen(true)}
+            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 active:scale-95 text-indigo-700 dark:text-indigo-300 font-bold rounded-xl flex items-center gap-1.5 border border-indigo-200 dark:border-indigo-800/80 transition-all cursor-pointer text-[11px]"
+            title="Wi-Fi ပရင်တာ ပြင်ဆင်ရန် / Manual IP ချိတ်ရန်"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span>ပရင်တာ ပြင်ဆင်ရန်</span>
+          </button>
+        </div>
+      </div>
+
       {/* LIVE PREVIEW CANVAS AREA */}
       <div className="flex-1 overflow-auto bg-slate-800/50 rounded-2xl p-4 flex justify-center items-start border border-slate-700/50">
         <div
@@ -361,6 +517,18 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
           dangerouslySetInnerHTML={{ __html: htmlContent }}
         />
       </div>
+
+      {/* NETWORK PRINTER MANAGEMENT MODAL */}
+      <NetworkPrinterModal
+        isOpen={isNetworkModalOpen}
+        onClose={() => setIsNetworkModalOpen(false)}
+        shopProfile={reportOptions.shopProfile}
+        onPrinterConnected={(p) => {
+          setNetworkPrinter(p);
+          setDriverNotice({ text: `${p.name} သို့ ချိတ်ဆက်ပြီးပါပြီ`, type: 'success' });
+          setTimeout(() => setDriverNotice(null), 3000);
+        }}
+      />
     </div>
   );
 };

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Printer, Copy, Check, FileCheck, Store, MapPin, Phone, Bluetooth, RefreshCw, FileText, Share2, Loader2 } from 'lucide-react';
 import { Transaction, ShopProfile } from '../types';
 import { formatKs } from '../utils/formatters';
-import { printReceiptDocument, exportReceiptToPdfAndShare } from '../utils/exportAndPrint';
+import { printReceiptDocument, exportReceiptToPdfAndShare, generateFullReceiptHtmlDocument } from '../utils/exportAndPrint';
+import { getSavedNetworkPrinter, autoRunVirtualDriver } from '../utils/networkPrinterDriver';
 import {
   printTransactionViaBluetooth,
   getBluetoothConnectionStatus,
@@ -77,8 +78,19 @@ ${transaction.cashAccountName ? `ငွေသားအကောင့်: ${tran
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handlePrint = () => {
-    printReceiptDocument(transaction, shopProfile);
+  const handlePrint = async () => {
+    try {
+      const fullHtml = generateFullReceiptHtmlDocument(transaction, shopProfile);
+      const savedPrinter = getSavedNetworkPrinter();
+      await autoRunVirtualDriver(fullHtml, {
+        printer: savedPrinter,
+        paperSize: 'pos80',
+        orientation: 'portrait',
+        title: `Receipt_${transaction.id}`,
+      });
+    } catch {
+      printReceiptDocument(transaction, shopProfile);
+    }
   };
 
   const [isPdfExporting, setIsPdfExporting] = useState(false);
