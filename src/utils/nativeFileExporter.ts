@@ -522,9 +522,29 @@ export async function exportToPdfNative(
   const isLandscape =
     options.orientation === 'landscape' ||
     (!options.orientation && options.tableHeaders.length >= 7);
-  const paperWidthMm = isLandscape ? 297 : 210;
-  const paperHeightMm = isLandscape ? 210 : 297;
-  const containerWidthPx = isLandscape ? 1122 : 800;
+
+  const paperSize = options.paperSize || 'a4';
+  let paperWidthMm = isLandscape ? 297 : 210;
+  let paperHeightMm = isLandscape ? 210 : 297;
+  let containerWidthPx = isLandscape ? 1122 : 800;
+  let jsPdfFormat: string | number[] = 'a4';
+
+  if (paperSize === 'letter') {
+    paperWidthMm = isLandscape ? 279.4 : 215.9;
+    paperHeightMm = isLandscape ? 215.9 : 279.4;
+    containerWidthPx = isLandscape ? 1056 : 816;
+    jsPdfFormat = 'letter';
+  } else if (paperSize === 'a5') {
+    paperWidthMm = isLandscape ? 210 : 148;
+    paperHeightMm = isLandscape ? 148 : 210;
+    containerWidthPx = isLandscape ? 794 : 560;
+    jsPdfFormat = 'a5';
+  } else if (paperSize === 'pos80') {
+    paperWidthMm = 80;
+    paperHeightMm = 200;
+    containerWidthPx = 320;
+    jsPdfFormat = [80, 200];
+  }
 
   let pdfDoc: jsPDF | null = null;
 
@@ -532,6 +552,7 @@ export async function exportToPdfNative(
   const pages = buildReportHtmlPages({
     ...options,
     orientation: isLandscape ? 'landscape' : 'portrait',
+    paperSize,
   });
 
   // Position container in foreground with opacity 1 to ensure browser layout & fonts are fully active
@@ -563,7 +584,7 @@ export async function exportToPdfNative(
     const pdf = new jsPDF({
       orientation: isLandscape ? 'landscape' : 'portrait',
       unit: 'mm',
-      format: 'a4',
+      format: jsPdfFormat as any,
       compress: true,
     });
 
@@ -600,7 +621,7 @@ export async function exportToPdfNative(
       const imgData = canvas.toDataURL('image/jpeg', 0.92);
 
       if (i > 0) {
-        pdf.addPage('a4', isLandscape ? 'landscape' : 'portrait');
+        pdf.addPage(jsPdfFormat as any, isLandscape ? 'landscape' : 'portrait');
       }
       pdf.addImage(imgData, 'JPEG', 0, 0, paperWidthMm, paperHeightMm);
     }

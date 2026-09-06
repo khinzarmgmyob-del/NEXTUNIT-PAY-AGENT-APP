@@ -21,7 +21,8 @@ import {
 } from 'lucide-react';
 import { Transaction, CashAccountItem, ShopProfile } from '../types';
 import { getTodayFormatted, formatKs } from '../utils/formatters';
-import { exportToExcelXlsx, exportToCsvBlob, printFormattedReport, exportReportToPdfAndShare } from '../utils/exportAndPrint';
+import { exportToExcelXlsx, exportToCsvBlob, PrintReportOptions } from '../utils/exportAndPrint';
+import { PrintPreviewModal } from './PrintPreviewModal';
 
 interface CashReconcileModalProps {
   onClose: () => void;
@@ -152,7 +153,7 @@ export const CashReconcileModal: React.FC<CashReconcileModalProps> = ({
     'ငွေသားအကောက်',
     'ငွေအမောက်/စီးဆင်းမှု',
     'ဝင်/ထွက် ပုံစံ',
-    'ကော်မရှင်ရငွေ (Ks)',
+    'ကော်မရှင်ရငွေ',
     'Wallet အကောက်',
     'မှတ်ချက်',
   ];
@@ -187,7 +188,7 @@ export const CashReconcileModal: React.FC<CashReconcileModalProps> = ({
     }
     const rows = getReportRows();
     const summaryRow = [
-      'စုစုပေါင်း',
+      'စုစုပေါင်း (Total)',
       '',
       '',
       '',
@@ -223,85 +224,58 @@ export const CashReconcileModal: React.FC<CashReconcileModalProps> = ({
     });
   };
 
-  const handlePrint = () => {
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+
+  const getPrintReportOptions = (): PrintReportOptions => {
     const rows = getReportRows();
     const summaryRow = [
-      'စုစုပေါင်း',
+      'စုစုပေါင်း (Total)',
       '',
       '',
       '',
       '',
       '',
-      `${netCashAmount >= 0 ? '+' : ''}${formatKs(netCashAmount)} Ks`,
+      `${netCashAmount >= 0 ? '+' : ''}${formatKs(netCashAmount)}`,
       `ဝင်: ${formatKs(totalCashIn)} | ထွက်: ${formatKs(totalCashOut)}`,
-      `+${formatKs(totalCommissionEarned)} Ks`,
+      `+${formatKs(totalCommissionEarned)}`,
       '',
-      '',
+      `စာရင်း ${sortedTransactions.length} ခု`,
     ];
 
-    printFormattedReport({
+    return {
       title: 'လက်ငင်းငွေသား Reconcile စာရင်း (Cash Reconcile)',
       subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
       shopProfile,
       summaryCards: [
-        { label: 'စုစုပေါင်း ငွေသားဝင် (+)', value: `+${formatKs(totalCashIn)} Ks`, note: 'Cash In' },
-        { label: 'စုစုပေါင်း ငွေသားထွက် (-)', value: `-${formatKs(totalCashOut)} Ks`, note: 'Cash Out' },
-        { label: 'အသားတင် ငွေသားကျန် (Net)', value: `${netCashAmount >= 0 ? '+' : ''}${formatKs(netCashAmount)} Ks`, note: 'Net Cash Balance' },
-        { label: 'စုစုပေါင်း ကော်မရှင်ရငွေ', value: `+${formatKs(totalCommissionEarned)} Ks`, note: `စာရင်း ${sortedTransactions.length} ခု` },
+        { label: 'စုစုပေါင်း ငွေသားဝင် (+)', value: `+${formatKs(totalCashIn)}`, note: 'Cash In' },
+        { label: 'စုစုပေါင်း ငွေသားထွက် (-)', value: `-${formatKs(totalCashOut)}`, note: 'Cash Out' },
+        { label: 'အသားတင် ငွေသားကျန် (Net)', value: `${netCashAmount >= 0 ? '+' : ''}${formatKs(netCashAmount)}`, note: 'Net Cash Balance' },
+        { label: 'စုစုပေါင်း ကော်မရှင်ရငွေ', value: `+${formatKs(totalCommissionEarned)}`, note: `စာရင်း ${sortedTransactions.length} ခု` },
       ],
       tableHeaders: headersList,
       tableRows: rows,
       summaryRow,
-    });
+      filename: `CashReconcile_${selectedReportDate}_${Date.now()}.pdf`,
+    };
   };
 
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const handlePrint = () => {
+    if (sortedTransactions.length === 0) {
+      alert('ဒေတာ မရှိပါ။');
+      return;
+    }
+    setShowPrintPreview(true);
+  };
 
-  // Export PDF & Native Share
-  const handleExportPdf = async () => {
+  const [isExportingPdf] = useState(false);
+
+  // Export PDF & Native Share - Opens unified Print & PDF Preview Modal
+  const handleExportPdf = () => {
     if (sortedTransactions.length === 0) {
       alert('PDF ထုတ်ယူရန် ဒေတာ မရှိပါ။');
       return;
     }
-    setIsExportingPdf(true);
-    try {
-      const rows = getReportRows();
-      const summaryRow = [
-        'စုစုပေါင်း',
-        '',
-        '',
-        '',
-        '',
-        '',
-        `${formatKs(totalCashIn)} Ks`,
-        `${formatKs(totalCashOut)} Ks`,
-        `${netCashAmount >= 0 ? '+' : ''}${formatKs(netCashAmount)} Ks`,
-        `+${formatKs(totalCommissionEarned)} Ks`,
-        '',
-        '',
-      ];
-
-      await exportReportToPdfAndShare({
-        title: 'လက်ငင်းငွေသား Reconcile စာရင်း (Cash Reconcile)',
-        subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
-        shopProfile,
-        summaryCards: [
-          { label: 'စုစုပေါင်း ငွေသားဝင် (+)', value: `+${formatKs(totalCashIn)} Ks`, note: 'Cash In' },
-          { label: 'စုစုပေါင်း ငွေသားထွက် (-)', value: `-${formatKs(totalCashOut)} Ks`, note: 'Cash Out' },
-          { label: 'အသားတင် ငွေသားကျန် (Net)', value: `${netCashAmount >= 0 ? '+' : ''}${formatKs(netCashAmount)} Ks`, note: 'Net Cash Balance' },
-          { label: 'စုစုပေါင်း ကော်မရှင်ရငွေ', value: `+${formatKs(totalCommissionEarned)} Ks`, note: `စာရင်း ${sortedTransactions.length} ခု` },
-        ],
-        tableHeaders: headersList,
-        tableRows: rows,
-        summaryRow,
-        filename: `CashReconcile_${selectedReportDate}_${Date.now()}.pdf`,
-      });
-    } catch (err) {
-      console.error('PDF export error:', err);
-      alert('PDF ထုတ်ယူရာတွင် အမှားတစ်ခု ဖြစ်ပေါ်ခဲ့ပါသည်။');
-    } finally {
-      setIsExportingPdf(false);
-    }
+    setShowPrintPreview(true);
   };
 
   return (
@@ -545,22 +519,66 @@ export const CashReconcileModal: React.FC<CashReconcileModalProps> = ({
                 <table className="w-full text-xs text-left border-collapse min-w-[900px]">
                   <thead className="bg-slate-100 dark:bg-slate-800 sticky top-0 z-20 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-slate-700 shadow-2xs">
                     <tr>
-                      <th className="p-2.5 whitespace-nowrap min-w-[44px]">စဉ်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[110px]">နေ့စွဲ / အချိန်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[130px]">ဖောက်သည်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[110px]">ဖုန်းနံပါတ်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[130px] bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300">
-                        💵 ငွေသားအကောက်
+                      <th className="px-2 py-2.5 whitespace-nowrap min-w-[44px]">
+                        <div className="flex flex-col">
+                          <span>စဉ်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(No.)</span>
+                        </div>
                       </th>
-                      <th className="p-2.5 text-right whitespace-nowrap min-w-[130px]">
-                        ငွေအမောက် / စီးဆင်းမှု
+                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[100px]">
+                        <div className="flex flex-col">
+                          <span>နေ့စွဲ / အချိန်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Date/Time)</span>
+                        </div>
                       </th>
-                      <th className="p-2.5 text-right whitespace-nowrap min-w-[100px] bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300">
-                        ကော်မရှင်ရငွေ
+                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[120px]">
+                        <div className="flex flex-col">
+                          <span>ဖောက်သည်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Customer)</span>
+                        </div>
                       </th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[120px]">Wallet အကောက်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[140px]">မှတ်ချက်</th>
-                      <th className="p-2.5 text-center whitespace-nowrap min-w-[80px]">လုပ်ဆောင်ချက်</th>
+                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[100px]">
+                        <div className="flex flex-col">
+                          <span>ဖုန်းနံပါတ်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Phone)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[120px] bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300">
+                        <div className="flex flex-col">
+                          <span>💵 ငွေသားအကောက်</span>
+                          <span className="text-[10px] font-normal text-emerald-600 dark:text-emerald-400">(Cash Box)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-2.5 text-right whitespace-nowrap w-px font-mono">
+                        <div className="flex flex-col items-end">
+                          <span>ငွေအမောက်/စီးဆင်းမှု</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Amount/Flow)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-2.5 text-right whitespace-nowrap w-px font-mono bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300">
+                        <div className="flex flex-col items-end">
+                          <span>ကော်မရှင်ရငွေ</span>
+                          <span className="text-[10px] font-normal text-amber-700 dark:text-amber-300">(Commission)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[110px]">
+                        <div className="flex flex-col">
+                          <span>Wallet အကောက်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Wallet)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[120px]">
+                        <div className="flex flex-col">
+                          <span>မှတ်ချက်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Note)</span>
+                        </div>
+                      </th>
+                      <th className="px-2 py-2.5 text-center whitespace-nowrap min-w-[70px]">
+                        <div className="flex flex-col items-center">
+                          <span>လုပ်ဆောင်ချက်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Action)</span>
+                        </div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -804,6 +822,13 @@ export const CashReconcileModal: React.FC<CashReconcileModalProps> = ({
         )}
       </div>
     </div>
+
+    {showPrintPreview && (
+      <PrintPreviewModal
+        reportOptions={getPrintReportOptions()}
+        onClose={() => setShowPrintPreview(false)}
+      />
+    )}
   </div>
 );
 };

@@ -219,6 +219,97 @@ export interface PrintReportOptions {
   orientation?: 'portrait' | 'landscape';
   fontSize?: 'compact' | 'normal' | 'large';
   marginSize?: 'compact' | 'normal' | 'wide';
+  paperSize?: 'a4' | 'letter' | 'a5' | 'pos80';
+  filename?: string;
+}
+
+/**
+ * Detects if a column is inherently numeric / an amount column based on its header name
+ */
+export function isNumericColumnHeader(header: string): boolean {
+  if (!header) return false;
+  const h = header.toLowerCase();
+  return (
+    h.includes('amount') ||
+    h.includes('actual') ||
+    h.includes('original') ||
+    h.includes('comm') ||
+    h.includes('balance') ||
+    h.includes('fee') ||
+    h.includes('total') ||
+    h.includes('in') ||
+    h.includes('out') ||
+    h.includes('flow') ||
+    h.includes('ငွေ') ||
+    h.includes('လက်ငင်း') ||
+    h.includes('မူလ') ||
+    h.includes('ကော်မရှင်') ||
+    h.includes('လက်ကျန်') ||
+    h.includes('အဝင်') ||
+    h.includes('အထွက်') ||
+    h.includes('အသားတင်') ||
+    h.includes('ကျသင့်') ||
+    h.includes('ပေါင်း') ||
+    h.includes('no.') ||
+    h.includes('စဉ်')
+  );
+}
+
+/**
+ * Formats a long report header title into 2 clean, stacked lines
+ * Line 1: Primary descriptive name
+ * Line 2: English or secondary label in parentheses
+ */
+export function formatHeaderTwoLines(header: string): { line1: string; line2: string; full: string } {
+  if (!header) return { line1: '', line2: '', full: '' };
+  const trimmed = header.trim();
+
+  // If header already contains an explicit break tag or newline
+  if (trimmed.includes('<br>') || trimmed.includes('<br/>')) {
+    const parts = trimmed.split(/<br\s*\/?>/i);
+    return { line1: parts[0].trim(), line2: parts.slice(1).join(' ').trim(), full: trimmed };
+  }
+  if (trimmed.includes('\n')) {
+    const parts = trimmed.split('\n');
+    return { line1: parts[0].trim(), line2: parts.slice(1).join(' ').trim(), full: trimmed };
+  }
+
+  // Check for parentheses at the end, e.g. "လက်ငင်းပေး/ရငွေ (Actual)" or "ဖောက်သည်အမည် (Customer)"
+  const parenMatch = trimmed.match(/^(.*?)\s*(\(.*?\))$/);
+  if (parenMatch) {
+    return {
+      line1: parenMatch[1].trim(),
+      line2: parenMatch[2].trim(),
+      full: trimmed,
+    };
+  }
+
+  // Check for slash with spaces e.g. "အဝင် / အထွက်"
+  if (trimmed.includes(' / ')) {
+    const parts = trimmed.split(' / ');
+    return {
+      line1: parts[0].trim(),
+      line2: `/ ${parts.slice(1).join(' / ')}`.trim(),
+      full: trimmed,
+    };
+  }
+
+  // If header is long and has spaces e.g. "Wallet အကောင့် အမည်"
+  const words = trimmed.split(/\s+/);
+  if (words.length >= 2 && trimmed.length > 9) {
+    const mid = Math.ceil(words.length / 2);
+    return {
+      line1: words.slice(0, mid).join(' '),
+      line2: words.slice(mid).join(' '),
+      full: trimmed,
+    };
+  }
+
+  return {
+    line1: trimmed,
+    line2: '',
+    full: trimmed,
+  };
 }
 
 /**
@@ -414,6 +505,7 @@ export function buildReportHtmlPages({
   orientation,
   fontSize = 'normal',
   marginSize = 'normal',
+  paperSize = 'a4',
 }: PrintReportOptions): string[] {
   const isLandscape = orientation === 'landscape' || (!orientation && tableHeaders.length >= 7);
   const shopName = shopProfile?.shopName || 'Money Agent POS';
@@ -448,8 +540,19 @@ export function buildReportHtmlPages({
     return 'left';
   });
 
-  const pageWidthPx = isLandscape ? 1122 : 800;
-  const pageMinHeightPx = isLandscape ? 770 : 1080;
+  let pageWidthPx = isLandscape ? 1122 : 800;
+  let pageMinHeightPx = isLandscape ? 770 : 1080;
+
+  if (paperSize === 'letter') {
+    pageWidthPx = isLandscape ? 1056 : 816;
+    pageMinHeightPx = isLandscape ? 816 : 1056;
+  } else if (paperSize === 'a5') {
+    pageWidthPx = isLandscape ? 794 : 560;
+    pageMinHeightPx = isLandscape ? 560 : 794;
+  } else if (paperSize === 'pos80') {
+    pageWidthPx = 320;
+    pageMinHeightPx = 600;
+  }
 
   // Margin padding calculation
   const pagePadding =
@@ -465,32 +568,32 @@ export function buildReportHtmlPages({
   let bodyFontSize = '8.5px';
   let summaryFontSize = '9px';
   let cellPadding = '3px 4px';
-  let headerPadding = '3.5px 4px';
+  let headerPadding = '4.5px 4px';
 
   if (fontSize === 'compact' || colCount > 13) {
     headerFontSize = colCount > 14 ? '7.5px' : '8px';
     bodyFontSize = colCount > 14 ? '7.5px' : '8px';
     summaryFontSize = '8px';
     cellPadding = '2px 3px';
-    headerPadding = '2.5px 3px';
+    headerPadding = '3.5px 3px';
   } else if (fontSize === 'large' && colCount <= 8) {
     headerFontSize = '11px';
     bodyFontSize = '10.5px';
     summaryFontSize = '11px';
     cellPadding = '5px 7px';
-    headerPadding = '6px 7px';
+    headerPadding = '7px 7px';
   } else if (colCount <= 6) {
     headerFontSize = '10.5px';
     bodyFontSize = '10px';
     summaryFontSize = '10.5px';
     cellPadding = '4px 6px';
-    headerPadding = '5px 6px';
+    headerPadding = '6px 6px';
   } else if (colCount <= 9) {
     headerFontSize = '9.5px';
     bodyFontSize = '9px';
     summaryFontSize = '9.5px';
     cellPadding = '3px 5px';
-    headerPadding = '4px 5px';
+    headerPadding = '5px 5px';
   }
 
   // Calculate page capacity based on font scale and orientation
@@ -531,12 +634,27 @@ export function buildReportHtmlPages({
 
   const renderTableHeader = () => `
     <thead>
-      <tr>
+      <tr style="min-height: 42px;">
         ${tableHeaders
-          .map(
-            (h, i) =>
-              `<th style="background-color: #f1f5f9; color: #0f172a; font-weight: 700; border: 1px solid #94a3b8; padding: ${headerPadding}; font-size: ${headerFontSize}; text-align: ${alignStyles[i]}; line-height: 1.25; word-break: normal; white-space: normal; vertical-align: middle;">${h}</th>`
-          )
+          .map((h, i) => {
+            const align = alignStyles[i] || 'left';
+            const flexAlign = align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start';
+            const parsed = formatHeaderTwoLines(h);
+            const isAmountOrNumeric = align === 'right' || isNumericColumnHeader(h);
+
+            return `<th style="background-color: #f1f5f9; color: #0f172a; font-weight: 700; border: 1px solid #94a3b8; padding: ${headerPadding}; font-size: ${headerFontSize}; text-align: ${align}; vertical-align: middle; line-height: 1.25; ${
+              isAmountOrNumeric ? 'width: 1%; white-space: nowrap;' : ''
+            }">
+              <div style="display: flex; flex-direction: column; justify-content: center; align-items: ${flexAlign}; width: 100%;">
+                <span style="font-weight: 700; color: #0f172a; white-space: nowrap;">${parsed.line1}</span>
+                ${
+                  parsed.line2
+                    ? `<span style="font-size: 0.84em; font-weight: 600; color: #475569; margin-top: 1.5px; white-space: nowrap;">${parsed.line2}</span>`
+                    : ''
+                }
+              </div>
+            </th>`;
+          })
           .join('')}
       </tr>
     </thead>
@@ -547,6 +665,7 @@ export function buildReportHtmlPages({
       ${row
         .map((cell, colIdx) => {
           const align = alignStyles[colIdx] || 'left';
+          const header = tableHeaders[colIdx] || '';
           const cellStr = cell !== undefined && cell !== null ? String(cell) : '-';
           const isPositive = cellStr.startsWith('+');
           const isNegative = cellStr.startsWith('-');
@@ -556,16 +675,17 @@ export function buildReportHtmlPages({
             ? 'color: #b91c1c; font-weight: bold;'
             : 'color: #1e293b;';
 
-          // Ensure amount columns stay single-line with tabular numbers, while long text wraps cleanly
+          // Amount and numeric columns shrink to fit their numbers (width: 1%; white-space: nowrap;)
           const isNumberOrAmount =
             align === 'right' ||
             isPositive ||
             isNegative ||
+            isNumericColumnHeader(header) ||
             /^[+-]?[\d,]+(\.\d+)?$/.test(cellStr.trim());
 
           return `<td style="border: 1px solid #cbd5e1; padding: ${cellPadding}; font-size: ${bodyFontSize}; text-align: ${align}; ${colorStyle}; line-height: 1.25; ${
             isNumberOrAmount
-              ? 'white-space: nowrap; font-variant-numeric: tabular-nums;'
+              ? 'white-space: nowrap; font-variant-numeric: tabular-nums; width: 1%;'
               : 'word-break: break-word;'
           }">${cellStr}</td>`;
         })
@@ -578,6 +698,7 @@ export function buildReportHtmlPages({
       ${sRow
         .map((cell, colIdx) => {
           const align = alignStyles[colIdx] || 'left';
+          const header = tableHeaders[colIdx] || '';
           const cellStr = cell !== undefined && cell !== null ? String(cell) : '';
           const isPositive = cellStr.startsWith('+');
           const isNegative = cellStr.startsWith('-');
@@ -586,7 +707,16 @@ export function buildReportHtmlPages({
             : isNegative
             ? 'color: #b91c1c;'
             : 'color: #0f172a;';
-          return `<td style="border: 1px solid #94a3b8; padding: ${cellPadding}; font-size: ${summaryFontSize}; text-align: ${align}; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; ${colorStyle}">${cellStr}</td>`;
+          const isNumberOrAmount =
+            align === 'right' ||
+            isPositive ||
+            isNegative ||
+            isNumericColumnHeader(header) ||
+            /^[+-]?[\d,]+(\.\d+)?$/.test(cellStr.trim());
+
+          return `<td style="border: 1px solid #94a3b8; padding: ${cellPadding}; font-size: ${summaryFontSize}; text-align: ${align}; font-weight: 800; font-variant-numeric: tabular-nums; ${colorStyle}; ${
+            isNumberOrAmount ? 'white-space: nowrap; width: 1%;' : ''
+          }">${cellStr}</td>`;
         })
         .join('')}
     </tr>

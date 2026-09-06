@@ -311,58 +311,15 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     setShowPrintPreview(true);
   };
 
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingPdf] = useState(false);
 
-  // Export PDF & Native Print / Save
-  const handleExportPdf = async () => {
+  // Export PDF & Native Print / Save - Opens the unified Print & PDF Preview Modal
+  const handleExportPdf = () => {
     if (filteredData.length === 0) {
       alert('PDF ထုတ်ယူရန် ဒေတာ မရှိပါ။');
       return;
     }
-    setIsExportingPdf(true);
-    try {
-      const rows = getReportRows();
-      const summaryRow = [
-        'စုစုပေါင်း (Total)',
-        '',
-        '',
-        '',
-        '',
-        `${netAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netAmount))}`,
-        `${netOriginalAmount >= 0 ? '+' : '-'}${formatKs(Math.abs(netOriginalAmount))}`,
-        `+${formatKs(totalCashComm)}`,
-        `+${formatKs(totalWalletComm)}`,
-        `+${formatKs(grandTotalComm)}`,
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        `စာရင်းပေါင်း ${filteredData.length} ခု (Total: ${filteredData.length})`,
-      ];
-
-      await exportToPdfNative({
-        title: title || 'အရောင်းအဝယ်နှင့် ကော်မရှင် ရှင်းတမ်း',
-        subtitle: `ရက်စွဲ: ${selectedReportDate === 'ALL' ? 'ရက်စွဲအားလုံး' : selectedReportDate}`,
-        shopProfile,
-        summaryCards: [
-          { label: 'ငွေသွင်း (Cash In)', value: `+${formatKs(totalIn)}`, note: 'လက်ငင်းငွေသားဝင်' },
-          { label: 'ငွေထုတ် (Cash Out)', value: `-${formatKs(totalOut)}`, note: 'လက်ငင်းငွေသားထုတ်' },
-          { label: 'ကော်မရှင်ရငွေ', value: `+${formatKs(grandTotalComm)}`, note: `Cash:${formatKs(totalCashComm)} | W:${formatKs(totalWalletComm)}` },
-          { label: 'စာရင်း အရေအတွက်', value: `${filteredData.length} ခု`, note: `လွှဲပြောင်း: ${formatKs(totalTransferVolume)}` },
-        ],
-        tableHeaders: headersList,
-        tableRows: rows,
-        summaryRow,
-        filename: `Report_${selectedReportDate}_${Date.now()}.pdf`,
-      });
-    } catch (err: any) {
-      console.error('PDF export error:', err);
-      alert(`PDF ထုတ်ယူရာတွင် အမှားတစ်ခု ဖြစ်ပေါ်ခဲ့ပါသည်: ${err?.message || err}`);
-    } finally {
-      setIsExportingPdf(false);
-    }
+    setShowPrintPreview(true);
   };
 
   return (
@@ -815,22 +772,78 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 <table className="w-full text-xs text-left border-collapse min-w-[880px]">
                   <thead className="bg-slate-100 dark:bg-slate-800 sticky top-0 z-20 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-slate-700 shadow-2xs">
                     <tr>
-                      <th className="p-2.5 whitespace-nowrap min-w-[48px]">စဉ်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[120px]">နေ့စွဲ/အချိန်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[130px]">ဖောက်သည် အမည်</th>
-                      <th className="p-2.5 text-center whitespace-nowrap min-w-[90px]">အမျိုးအစား</th>
-                      <th className="p-2.5 text-right whitespace-nowrap min-w-[130px]">လက်ငင်း/လွှဲငွေ (Ks)</th>
-                      <th className="p-2.5 text-right whitespace-nowrap min-w-[110px]">မူလလွှဲငွေ (Ks)</th>
-                      <th className="p-2.5 text-right whitespace-nowrap min-w-[120px] bg-amber-50/70 text-amber-900">
-                        💵 ငွေသားကော်မရှင်
+                      <th className="px-2 py-2.5 whitespace-nowrap min-w-[44px]">
+                        <div className="flex flex-col">
+                          <span>စဉ်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(No.)</span>
+                        </div>
                       </th>
-                      <th className="p-2.5 text-right whitespace-nowrap min-w-[120px] bg-purple-50/70 text-purple-900">
-                        📱 Walletကော်မရှင်
+                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[110px]">
+                        <div className="flex flex-col">
+                          <span>နေ့စွဲ/အချိန်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Date/Time)</span>
+                        </div>
                       </th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[130px]">Wallet အကောင့်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[120px]">ငွေသား အကောင့်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[110px]">OCR/Slip Ref</th>
-                      <th className="p-2.5 text-center whitespace-nowrap min-w-[90px]">လုပ်ဆောင်ချက်</th>
+                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[120px]">
+                        <div className="flex flex-col">
+                          <span>ဖောက်သည် အမည်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Customer)</span>
+                        </div>
+                      </th>
+                      <th className="px-2 py-2.5 text-center whitespace-nowrap min-w-[70px]">
+                        <div className="flex flex-col items-center">
+                          <span>အမျိုးအစား</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Type)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-2.5 text-right whitespace-nowrap w-px font-mono">
+                        <div className="flex flex-col items-end">
+                          <span>လက်ငင်း/လွှဲငွေ</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Actual Paid)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-2.5 text-right whitespace-nowrap w-px font-mono">
+                        <div className="flex flex-col items-end">
+                          <span>မူလလွှဲငွေ</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Original)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-2.5 text-right whitespace-nowrap w-px bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-mono">
+                        <div className="flex flex-col items-end">
+                          <span>ငွေသားကော်မရှင်</span>
+                          <span className="text-[10px] font-normal text-amber-700 dark:text-amber-300">(Cash Comm)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-2.5 text-right whitespace-nowrap w-px bg-purple-50/70 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 font-mono">
+                        <div className="flex flex-col items-end">
+                          <span>Walletကော်မရှင်</span>
+                          <span className="text-[10px] font-normal text-purple-700 dark:text-purple-300">(Wallet Comm)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[120px]">
+                        <div className="flex flex-col">
+                          <span>Wallet အကောင့်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Wallet)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[110px]">
+                        <div className="flex flex-col">
+                          <span>ငွေသား အကောင့်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Cash Box)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[100px]">
+                        <div className="flex flex-col">
+                          <span>OCR/Slip Ref</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Voucher)</span>
+                        </div>
+                      </th>
+                      <th className="px-2 py-2.5 text-center whitespace-nowrap min-w-[70px]">
+                        <div className="flex flex-col items-center">
+                          <span>လုပ်ဆောင်ချက်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Action)</span>
+                        </div>
+                      </th>
                     </tr>
                   </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -874,7 +887,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 
                           {/* Actual Cash / Transfer */}
                           <td
-                            className={`p-2.5 text-right font-bold whitespace-nowrap ${
+                            className={`p-2.5 text-right font-bold whitespace-nowrap w-px font-mono ${
                               isTransfer
                                 ? 'text-sky-700'
                                 : isCashOut
@@ -885,13 +898,13 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                             {isTransfer
                               ? formatKs(item.amount)
                               : isCashOut
-                              ? `- ${actualCash.toLocaleString()} Ks`
-                              : `+ ${actualCash.toLocaleString()} Ks`}
+                              ? `- ${actualCash.toLocaleString()}`
+                              : `+ ${actualCash.toLocaleString()}`}
                           </td>
 
                           {/* Original Amount (မူလလွှဲငွေ) */}
                           <td
-                            className={`p-2.5 text-right font-bold whitespace-nowrap ${
+                            className={`p-2.5 text-right font-bold whitespace-nowrap w-px font-mono ${
                               isTransfer
                                 ? 'text-slate-700'
                                 : isCashOut
@@ -900,20 +913,20 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                             }`}
                           >
                             {isTransfer
-                              ? `${item.amount.toLocaleString()} Ks`
+                              ? `${item.amount.toLocaleString()}`
                               : isCashOut
-                              ? `- ${item.amount.toLocaleString()} Ks`
-                              : `+ ${item.amount.toLocaleString()} Ks`}
+                              ? `- ${item.amount.toLocaleString()}`
+                              : `+ ${item.amount.toLocaleString()}`}
                           </td>
 
                           {/* Cash Commission */}
-                          <td className="p-2.5 text-right font-bold whitespace-nowrap bg-amber-50/30 text-amber-800">
-                            {cashComm > 0 ? `+${cashComm.toLocaleString()} Ks` : '-'}
+                          <td className="p-2.5 text-right font-bold whitespace-nowrap w-px font-mono bg-amber-50/30 text-amber-800">
+                            {cashComm > 0 ? `+${cashComm.toLocaleString()}` : '-'}
                           </td>
 
                           {/* Wallet Commission */}
-                          <td className="p-2.5 text-right font-bold whitespace-nowrap bg-purple-50/30 text-purple-800">
-                            {walletComm > 0 ? `+${walletComm.toLocaleString()} Ks` : '-'}
+                          <td className="p-2.5 text-right font-bold whitespace-nowrap w-px font-mono bg-purple-50/30 text-purple-800">
+                            {walletComm > 0 ? `+${walletComm.toLocaleString()}` : '-'}
                           </td>
 
                           <td className="p-2.5 text-slate-700 whitespace-nowrap">
@@ -980,32 +993,32 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                       </td>
                       {/* Actual Cash Column Footer */}
                       <td
-                        className={`p-2.5 text-right whitespace-nowrap font-black ${
+                        className={`p-2.5 text-right whitespace-nowrap w-px font-mono font-black ${
                           netAmount >= 0 ? 'text-emerald-700' : 'text-red-600'
                         }`}
                       >
-                        {netAmount >= 0 ? `+${formatKs(netAmount)} Ks` : `-${formatKs(Math.abs(netAmount))} Ks`}
+                        {netAmount >= 0 ? `+${formatKs(netAmount)}` : `-${formatKs(Math.abs(netAmount))}`}
                       </td>
                       {/* Original Amount Column Footer */}
                       <td
-                        className={`p-2.5 text-right whitespace-nowrap font-black ${
+                        className={`p-2.5 text-right whitespace-nowrap w-px font-mono font-black ${
                           netOriginalAmount >= 0 ? 'text-emerald-700' : 'text-red-600'
                         }`}
                       >
-                        <div>{netOriginalAmount >= 0 ? `+${formatKs(netOriginalAmount)} Ks` : `-${formatKs(Math.abs(netOriginalAmount))} Ks`}</div>
-                        <div className="text-[10px] text-slate-500 font-medium">စုစုပေါင်း: {formatKs(totalVolume)} Ks</div>
+                        <div>{netOriginalAmount >= 0 ? `+${formatKs(netOriginalAmount)}` : `-${formatKs(Math.abs(netOriginalAmount))}`}</div>
+                        <div className="text-[10px] text-slate-500 font-medium">စုစုပေါင်း: {formatKs(totalVolume)}</div>
                       </td>
                       {/* Cash Commission Column Footer */}
-                      <td className="p-2.5 text-right whitespace-nowrap text-amber-800 bg-amber-100/50 font-black">
-                        +{formatKs(totalCashComm)} Ks
+                      <td className="p-2.5 text-right whitespace-nowrap w-px font-mono text-amber-800 bg-amber-100/50 font-black">
+                        +{formatKs(totalCashComm)}
                       </td>
                       {/* Wallet Commission Column Footer */}
-                      <td className="p-2.5 text-right whitespace-nowrap text-purple-800 bg-purple-100/50 font-black">
-                        +{formatKs(totalWalletComm)} Ks
+                      <td className="p-2.5 text-right whitespace-nowrap w-px font-mono text-purple-800 bg-purple-100/50 font-black">
+                        +{formatKs(totalWalletComm)}
                       </td>
                       {/* Accounts & Actions Footers */}
                       <td colSpan={3} className="p-2.5 whitespace-nowrap text-indigo-900">
-                        👉 စုစုပေါင်း ကော်မရှင်: <b className="text-emerald-700 font-black text-xs">+{formatKs(grandTotalComm)} Ks</b>
+                        👉 စုစုပေါင်း ကော်မရှင်: <b className="text-emerald-700 font-black text-xs font-mono">+{formatKs(grandTotalComm)}</b>
                       </td>
                     </tr>
                   </tfoot>

@@ -42,7 +42,7 @@ import {
 import { NetworkPrinterModal } from './NetworkPrinterModal';
 
 interface PrintPreviewModalProps {
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose: () => void;
   reportOptions: PrintReportOptions & {
     filename?: string;
@@ -55,10 +55,11 @@ type MarginSize = 'normal' | 'compact' | 'wide';
 type FontSize = 'normal' | 'compact' | 'large';
 
 export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
-  isOpen,
+  isOpen = true,
   onClose,
   reportOptions,
 }) => {
+  if (isOpen === false) return null;
   const defaultOrientation: Orientation =
     reportOptions.orientation ||
     (reportOptions.tableHeaders && reportOptions.tableHeaders.length >= 7 ? 'landscape' : 'portrait');
@@ -236,6 +237,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
     orientation,
     fontSize,
     marginSize,
+    paperSize,
   });
 
   const [isPrintingWithDriver, setIsPrintingWithDriver] = useState(false);
@@ -368,6 +370,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
         orientation,
         fontSize,
         marginSize,
+        paperSize,
         filename: reportOptions.filename || `${reportOptions.title.replace(/\s+/g, '_')}_${Date.now()}.pdf`,
       });
     } catch (err: any) {

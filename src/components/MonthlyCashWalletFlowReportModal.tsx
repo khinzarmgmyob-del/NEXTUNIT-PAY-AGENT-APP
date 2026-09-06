@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import { Transaction, WalletItem, CashAccountItem, ShopProfile } from '../types';
 import { formatKs, getTodayFormatted } from '../utils/formatters';
-import { exportToExcelXlsx, exportToCsvBlob, printFormattedReport, exportReportToPdfAndShare } from '../utils/exportAndPrint';
+import { exportToExcelXlsx, exportToCsvBlob, PrintReportOptions } from '../utils/exportAndPrint';
+import { PrintPreviewModal } from './PrintPreviewModal';
 
 interface MonthlyCashWalletFlowReportModalProps {
   onClose: () => void;
@@ -340,17 +341,18 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
     });
   };
 
-  // Formatted Print
-  const handlePrint = () => {
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+
+  const getPrintReportOptions = (): PrintReportOptions => {
     const { headers, rows, summaryRow } = getExportData();
     const formattedSummaryRow = summaryRow.map((val, idx) => {
-      if (idx === 0) return 'စုစုပေါင်း';
+      if (idx === 0) return 'စုစုပေါင်း (Total)';
       const num = Number(val);
       if (isNaN(num)) return String(val);
       return `${num > 0 ? '+' : ''}${formatKs(num)}`;
     });
 
-    printFormattedReport({
+    return {
       title: 'SUMMARY OF MONTHLY CASH & WALLET FLOW STATEMENT',
       subtitle: `လ: ${selectedMonth} | ဆိုင်အမည်: ${shopProfile?.shopName || 'Money Agent POS'}`,
       shopProfile,
@@ -369,54 +371,28 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
         })
       ),
       summaryRow: formattedSummaryRow,
-    });
+      filename: `MonthlyFlow_${selectedMonth}_${Date.now()}.pdf`,
+    };
   };
 
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  // Formatted Print - Opens unified Print & PDF Preview Modal
+  const handlePrint = () => {
+    if (dailyRows.length === 0) {
+      alert('ဒေတာ မရှိပါ။');
+      return;
+    }
+    setShowPrintPreview(true);
+  };
 
-  // Export to PDF & Native Share
-  const handleExportPdf = async () => {
+  const [isExportingPdf] = useState(false);
+
+  // Export to PDF & Native Share - Opens unified Print & PDF Preview Modal
+  const handleExportPdf = () => {
     if (dailyRows.length === 0) {
       alert('PDF ထုတ်ယူရန် ဒေတာ မရှိပါ။');
       return;
     }
-    setIsExportingPdf(true);
-    try {
-      const { headers, rows, summaryRow } = getExportData();
-      const formattedSummaryRow = summaryRow.map((val, idx) => {
-        if (idx === 0) return 'စုစုပေါင်း';
-        const num = Number(val);
-        if (isNaN(num)) return String(val);
-        return `${num > 0 ? '+' : ''}${formatKs(num)}`;
-      });
-
-      await exportReportToPdfAndShare({
-        title: 'SUMMARY OF MONTHLY CASH & WALLET FLOW STATEMENT',
-        subtitle: `လ: ${selectedMonth} | ဆိုင်အမည်: ${shopProfile?.shopName || 'Money Agent POS'}`,
-        shopProfile,
-        summaryCards: [
-          { label: 'လစဉ် စုစုပေါင်း ဝင်ငွေ (+)', value: `+${formatKs(grandTotals.totalIn)}`, note: 'Cash & Wallet In' },
-          { label: 'လစဉ် စုစုပေါင်း ထွက်ငွေ (-)', value: `-${formatKs(grandTotals.totalOut)}`, note: 'Cash & Wallet Out' },
-          { label: 'လစဉ် အသားတင် ငွေစီးဆင်းမှု', value: `${grandTotals.netFlow >= 0 ? '+' : ''}${formatKs(grandTotals.netFlow)}`, note: 'Net Monthly Flow' },
-          { label: 'လှုပ်ရှားမှုရှိသော ရက်ပေါင်း', value: `${dailyRows.length} ရက်`, note: `${selectedMonth}` },
-        ],
-        tableHeaders: headers,
-        tableRows: rows.map((r) =>
-          r.map((cell, idx) => {
-            if (idx === 0) return String(cell);
-            const n = Number(cell);
-            return isNaN(n) ? String(cell) : n !== 0 ? formatKs(n) : '-';
-          })
-        ),
-        summaryRow: formattedSummaryRow,
-        filename: `MonthlyFlow_${selectedMonth}_${Date.now()}.pdf`,
-      });
-    } catch (err) {
-      console.error('PDF export error:', err);
-      alert('PDF ထုတ်ယူရာတွင် အမှားတစ်ခု ဖြစ်ပေါ်ခဲ့ပါသည်။');
-    } finally {
-      setIsExportingPdf(false);
-    }
+    setShowPrintPreview(true);
   };
 
   return (
@@ -832,6 +808,13 @@ export const MonthlyCashWalletFlowReportModal: React.FC<MonthlyCashWalletFlowRep
           )}
         </div>
       </div>
+
+      {showPrintPreview && (
+        <PrintPreviewModal
+          reportOptions={getPrintReportOptions()}
+          onClose={() => setShowPrintPreview(false)}
+        />
+      )}
     </div>
   );
 };
