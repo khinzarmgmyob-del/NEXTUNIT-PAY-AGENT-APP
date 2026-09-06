@@ -262,7 +262,8 @@ export function isNumericColumnHeader(header: string): boolean {
  */
 export function formatHeaderTwoLines(header: string): { line1: string; line2: string; full: string } {
   if (!header) return { line1: '', line2: '', full: '' };
-  const trimmed = header.trim();
+  // Clean out redundant currency symbols from table headers
+  const trimmed = header.replace(/\s*\(\s*Ks\s*\)/gi, '').replace(/\s+Ks\b/gi, '').trim();
 
   // If header already contains an explicit break tag or newline
   if (trimmed.includes('<br>') || trimmed.includes('<br/>')) {
@@ -562,38 +563,38 @@ export function buildReportHtmlPages({
       ? '22px 26px'
       : '14px 18px';
 
-  // Dynamic typography & spacing calculation to guarantee zero overlap
+  // Dynamic typography & spacing calculation to guarantee zero overlap and ample row room
   const colCount = tableHeaders.length;
-  let headerFontSize = '9px';
+  let headerFontSize = '9.5px';
   let bodyFontSize = '8.5px';
   let summaryFontSize = '9px';
-  let cellPadding = '3px 4px';
-  let headerPadding = '4.5px 4px';
+  let cellPadding = '4px 5px';
+  let headerPadding = '7px 6px';
 
   if (fontSize === 'compact' || colCount > 13) {
     headerFontSize = colCount > 14 ? '7.5px' : '8px';
     bodyFontSize = colCount > 14 ? '7.5px' : '8px';
     summaryFontSize = '8px';
-    cellPadding = '2px 3px';
-    headerPadding = '3.5px 3px';
+    cellPadding = '3px 4px';
+    headerPadding = '6px 4px';
   } else if (fontSize === 'large' && colCount <= 8) {
-    headerFontSize = '11px';
+    headerFontSize = '11.5px';
     bodyFontSize = '10.5px';
     summaryFontSize = '11px';
-    cellPadding = '5px 7px';
-    headerPadding = '7px 7px';
+    cellPadding = '6px 8px';
+    headerPadding = '10px 8px';
   } else if (colCount <= 6) {
-    headerFontSize = '10.5px';
+    headerFontSize = '11px';
     bodyFontSize = '10px';
     summaryFontSize = '10.5px';
-    cellPadding = '4px 6px';
-    headerPadding = '6px 6px';
+    cellPadding = '5px 7px';
+    headerPadding = '9px 7px';
   } else if (colCount <= 9) {
-    headerFontSize = '9.5px';
+    headerFontSize = '10px';
     bodyFontSize = '9px';
     summaryFontSize = '9.5px';
-    cellPadding = '3px 5px';
-    headerPadding = '5px 5px';
+    cellPadding = '4px 6px';
+    headerPadding = '8px 6px';
   }
 
   // Calculate page capacity based on font scale and orientation
@@ -634,7 +635,7 @@ export function buildReportHtmlPages({
 
   const renderTableHeader = () => `
     <thead>
-      <tr style="min-height: 42px;">
+      <tr style="min-height: 52px;">
         ${tableHeaders
           .map((h, i) => {
             const align = alignStyles[i] || 'left';
@@ -642,14 +643,14 @@ export function buildReportHtmlPages({
             const parsed = formatHeaderTwoLines(h);
             const isAmountOrNumeric = align === 'right' || isNumericColumnHeader(h);
 
-            return `<th style="background-color: #f1f5f9; color: #0f172a; font-weight: 700; border: 1px solid #94a3b8; padding: ${headerPadding}; font-size: ${headerFontSize}; text-align: ${align}; vertical-align: middle; line-height: 1.25; ${
+            return `<th style="background-color: #f1f5f9; color: #0f172a; font-weight: 700; border: 1px solid #94a3b8; padding: ${headerPadding}; font-size: ${headerFontSize}; text-align: ${align}; vertical-align: middle; line-height: 1.35; ${
               isAmountOrNumeric ? 'width: 1%; white-space: nowrap;' : ''
             }">
-              <div style="display: flex; flex-direction: column; justify-content: center; align-items: ${flexAlign}; width: 100%;">
-                <span style="font-weight: 700; color: #0f172a; white-space: nowrap;">${parsed.line1}</span>
+              <div style="display: flex; flex-direction: column; justify-content: center; align-items: ${flexAlign}; width: 100%; text-align: ${align}; min-height: 42px;">
+                <span style="font-weight: 700; color: #0f172a; word-break: break-word; overflow-wrap: break-word; line-height: 1.3;">${parsed.line1}</span>
                 ${
                   parsed.line2
-                    ? `<span style="font-size: 0.84em; font-weight: 600; color: #475569; margin-top: 1.5px; white-space: nowrap;">${parsed.line2}</span>`
+                    ? `<span style="font-size: 0.86em; font-weight: 600; color: #475569; margin-top: 2px; word-break: break-word; overflow-wrap: break-word; line-height: 1.25;">${parsed.line2}</span>`
                     : ''
                 }
               </div>

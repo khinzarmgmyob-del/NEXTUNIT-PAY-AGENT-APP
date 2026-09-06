@@ -648,27 +648,27 @@ export const TotalAccountsReportModal: React.FC<TotalAccountsReportModalProps> =
                         အခြား
                       </th>
                     </tr>
-                    <tr>
-                      <th className="px-2 py-2 whitespace-nowrap min-w-[44px]">
+                    <tr className="min-h-[52px]">
+                      <th className="px-2 py-3.5 whitespace-nowrap min-w-[44px]">
                         <div className="flex flex-col">
                           <span>စဉ်</span>
                           <span className="text-[10px] font-normal text-slate-500">(No.)</span>
                         </div>
                       </th>
-                      <th className="px-2 py-2 whitespace-nowrap min-w-[100px]">
-                        <div className="flex flex-col">
+                      <th className="px-2.5 py-3.5 min-w-[100px]">
+                        <div className="flex flex-col break-words leading-snug">
                           <span>ရက်စွဲ/အချိန်</span>
                           <span className="text-[10px] font-normal text-slate-500">(Date/Time)</span>
                         </div>
                       </th>
-                      <th className="px-2 py-2 whitespace-nowrap min-w-[110px]">
-                        <div className="flex flex-col">
+                      <th className="px-2.5 py-3.5 min-w-[110px]">
+                        <div className="flex flex-col break-words leading-snug">
                           <span>ဖောက်သည်</span>
                           <span className="text-[10px] font-normal text-slate-500">(Customer)</span>
                         </div>
                       </th>
-                      <th className="px-2 py-2 whitespace-nowrap min-w-[80px] border-r border-slate-300 dark:border-slate-700">
-                        <div className="flex flex-col">
+                      <th className="px-2 py-3.5 min-w-[80px] border-r border-slate-300 dark:border-slate-700">
+                        <div className="flex flex-col items-center leading-snug">
                           <span>အမျိုးအစား</span>
                           <span className="text-[10px] font-normal text-slate-500">(Type)</span>
                         </div>
@@ -678,9 +678,9 @@ export const TotalAccountsReportModal: React.FC<TotalAccountsReportModalProps> =
                       {cashAccounts.map((c) => (
                         <th
                           key={`th-c-${c.id}`}
-                          className="px-2 py-2 text-right whitespace-nowrap w-px font-mono bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 font-bold"
+                          className="px-2.5 py-3.5 text-right whitespace-nowrap w-px font-mono bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 font-bold"
                         >
-                          <div className="flex flex-col items-end">
+                          <div className="flex flex-col items-end leading-snug">
                             <span>{c.name}</span>
                             <span className="text-[10px] font-normal text-emerald-700 dark:text-emerald-400">(Cash)</span>
                           </div>
@@ -691,25 +691,25 @@ export const TotalAccountsReportModal: React.FC<TotalAccountsReportModalProps> =
                       {wallets.map((w, wIdx) => (
                         <th
                           key={`th-w-${w.id}`}
-                          className={`px-2 py-2 text-right whitespace-nowrap w-px font-mono bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-300 font-bold ${
+                          className={`px-2.5 py-3.5 text-right whitespace-nowrap w-px font-mono bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-300 font-bold ${
                             wIdx === wallets.length - 1 ? 'border-r border-slate-300 dark:border-slate-700' : ''
                           }`}
                         >
-                          <div className="flex flex-col items-end">
+                          <div className="flex flex-col items-end leading-snug">
                             <span>{w.name}</span>
                             <span className="text-[10px] font-normal text-indigo-700 dark:text-indigo-300">(Wallet)</span>
                           </div>
                         </th>
                       ))}
 
-                      <th className="px-2 py-2 text-right whitespace-nowrap w-px font-mono bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300">
-                        <div className="flex flex-col items-end">
+                      <th className="px-2.5 py-3.5 text-right whitespace-nowrap w-px font-mono bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300">
+                        <div className="flex flex-col items-end leading-snug">
                           <span>ကော်မရှင်</span>
                           <span className="text-[10px] font-normal text-amber-700 dark:text-amber-300">(Comm)</span>
                         </div>
                       </th>
-                      <th className="px-2 py-2 whitespace-nowrap min-w-[110px]">
-                        <div className="flex flex-col">
+                      <th className="px-2.5 py-3.5 min-w-[110px]">
+                        <div className="flex flex-col break-words leading-snug">
                           <span>မှတ်ချက်</span>
                           <span className="text-[10px] font-normal text-slate-500">(Note)</span>
                         </div>

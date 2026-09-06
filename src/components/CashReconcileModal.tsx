@@ -518,63 +518,63 @@ export const CashReconcileModal: React.FC<CashReconcileModalProps> = ({
               <div className="overflow-x-auto overflow-y-auto max-h-[58vh] sm:max-h-[64vh] overscroll-contain border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 shadow-2xs">
                 <table className="w-full text-xs text-left border-collapse min-w-[900px]">
                   <thead className="bg-slate-100 dark:bg-slate-800 sticky top-0 z-20 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-slate-700 shadow-2xs">
-                    <tr>
-                      <th className="px-2 py-2.5 whitespace-nowrap min-w-[44px]">
+                    <tr className="min-h-[52px]">
+                      <th className="px-2 py-3.5 whitespace-nowrap min-w-[44px]">
                         <div className="flex flex-col">
                           <span>စဉ်</span>
                           <span className="text-[10px] font-normal text-slate-500">(No.)</span>
                         </div>
                       </th>
-                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[100px]">
-                        <div className="flex flex-col">
+                      <th className="px-2.5 py-3.5 min-w-[100px]">
+                        <div className="flex flex-col break-words leading-snug">
                           <span>နေ့စွဲ / အချိန်</span>
                           <span className="text-[10px] font-normal text-slate-500">(Date/Time)</span>
                         </div>
                       </th>
-                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[120px]">
-                        <div className="flex flex-col">
+                      <th className="px-2.5 py-3.5 min-w-[120px]">
+                        <div className="flex flex-col break-words leading-snug">
                           <span>ဖောက်သည်</span>
                           <span className="text-[10px] font-normal text-slate-500">(Customer)</span>
                         </div>
                       </th>
-                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[100px]">
-                        <div className="flex flex-col">
+                      <th className="px-2.5 py-3.5 min-w-[100px]">
+                        <div className="flex flex-col break-words leading-snug">
                           <span>ဖုန်းနံပါတ်</span>
                           <span className="text-[10px] font-normal text-slate-500">(Phone)</span>
                         </div>
                       </th>
-                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[120px] bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300">
-                        <div className="flex flex-col">
+                      <th className="px-2.5 py-3.5 min-w-[120px] bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300">
+                        <div className="flex flex-col break-words leading-snug">
                           <span>💵 ငွေသားအကောက်</span>
                           <span className="text-[10px] font-normal text-emerald-600 dark:text-emerald-400">(Cash Box)</span>
                         </div>
                       </th>
-                      <th className="px-2.5 py-2.5 text-right whitespace-nowrap w-px font-mono">
-                        <div className="flex flex-col items-end">
+                      <th className="px-2.5 py-3.5 text-right whitespace-nowrap w-px font-mono">
+                        <div className="flex flex-col items-end leading-snug">
                           <span>ငွေအမောက်/စီးဆင်းမှု</span>
                           <span className="text-[10px] font-normal text-slate-500">(Amount/Flow)</span>
                         </div>
                       </th>
-                      <th className="px-2.5 py-2.5 text-right whitespace-nowrap w-px font-mono bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300">
-                        <div className="flex flex-col items-end">
+                      <th className="px-2.5 py-3.5 text-right whitespace-nowrap w-px font-mono bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300">
+                        <div className="flex flex-col items-end leading-snug">
                           <span>ကော်မရှင်ရငွေ</span>
                           <span className="text-[10px] font-normal text-amber-700 dark:text-amber-300">(Commission)</span>
                         </div>
                       </th>
-                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[110px]">
-                        <div className="flex flex-col">
+                      <th className="px-2.5 py-3.5 min-w-[110px]">
+                        <div className="flex flex-col break-words leading-snug">
                           <span>Wallet အကောက်</span>
                           <span className="text-[10px] font-normal text-slate-500">(Wallet)</span>
                         </div>
                       </th>
-                      <th className="px-2.5 py-2.5 whitespace-nowrap min-w-[120px]">
-                        <div className="flex flex-col">
+                      <th className="px-2.5 py-3.5 min-w-[120px]">
+                        <div className="flex flex-col break-words leading-snug">
                           <span>မှတ်ချက်</span>
                           <span className="text-[10px] font-normal text-slate-500">(Note)</span>
                         </div>
                       </th>
-                      <th className="px-2 py-2.5 text-center whitespace-nowrap min-w-[70px]">
-                        <div className="flex flex-col items-center">
+                      <th className="px-2 py-3.5 text-center whitespace-nowrap min-w-[70px]">
+                        <div className="flex flex-col items-center leading-snug">
                           <span>လုပ်ဆောင်ချက်</span>
                           <span className="text-[10px] font-normal text-slate-500">(Action)</span>
                         </div>

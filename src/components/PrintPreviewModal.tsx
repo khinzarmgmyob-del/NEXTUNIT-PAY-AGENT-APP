@@ -77,17 +77,25 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
   const [driverNotice, setDriverNotice] = useState<{ text: string; type: 'info' | 'success' } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
+  // Stable fingerprint of table headers (only changes if an entirely different report is passed)
+  const headersSignature = useMemo(() => {
+    return (reportOptions.tableHeaders || []).join('___');
+  }, [reportOptions.tableHeaders]);
+
+  const lastSignatureRef = useRef<string>(headersSignature);
+
   // Column Visibility state: list of visible column indices
   const [visibleColumnIndices, setVisibleColumnIndices] = useState<number[]>(() =>
     reportOptions.tableHeaders ? reportOptions.tableHeaders.map((_, i) => i) : []
   );
 
-  // Re-sync when table headers change
+  // ONLY re-sync if the actual headers signature changes to a different report
   useEffect(() => {
-    if (reportOptions.tableHeaders) {
-      setVisibleColumnIndices(reportOptions.tableHeaders.map((_, i) => i));
+    if (headersSignature !== lastSignatureRef.current) {
+      lastSignatureRef.current = headersSignature;
+      setVisibleColumnIndices(reportOptions.tableHeaders ? reportOptions.tableHeaders.map((_, i) => i) : []);
     }
-  }, [reportOptions.tableHeaders]);
+  }, [headersSignature, reportOptions.tableHeaders]);
 
   useEffect(() => {
     if (isOpen) {

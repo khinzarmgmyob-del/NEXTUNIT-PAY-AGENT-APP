@@ -631,7 +631,7 @@ export default function App() {
     }
   };
 
-  // Direct PDF Export & Native Share for Ledger
+  // PDF Preview, Column Selection & Export for Ledger
   const handleLedgerExportPdf = async () => {
     setIsLedgerExportingPdf(true);
     try {
@@ -640,7 +640,7 @@ export default function App() {
         showToast('PDF ထုတ်ရန် ဒေတာ မရှိပါ။', 'info');
         return;
       }
-      await exportToPdfNative({
+      setLedgerReportOptions({
         title: data.title,
         subtitle: data.subtitle,
         shopProfile,
@@ -650,8 +650,9 @@ export default function App() {
         summaryRow: data.summaryRow,
         filename: `Transactions_Ledger_${todayStr}_${Date.now()}.pdf`,
       });
+      setShowLedgerPrintPreview(true);
     } catch (e: any) {
-      showToast(`PDF ထုတ်ယူရာတွင် အမှား: ${e?.message || e}`, 'error');
+      showToast(`PDF ပြင်ဆင်ရာတွင် အမှား: ${e?.message || e}`, 'error');
     } finally {
       setIsLedgerExportingPdf(false);
     }
@@ -1778,19 +1779,79 @@ export default function App() {
               <div className="overflow-x-auto overflow-y-auto max-h-[58vh] sm:max-h-[64vh] overscroll-contain border border-slate-200/80 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 shadow-2xs">
                 <table className="w-full text-xs text-left border-collapse min-w-[850px]">
                   <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-slate-700 sticky top-0 z-20 shadow-2xs">
-                    <tr>
-                      <th className="p-2.5 whitespace-nowrap min-w-[44px]">စဉ်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[120px]">နေ့စွဲ/အချိန်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[130px]">ဖောက်သည် အမည်</th>
-                      <th className="p-2.5 text-center whitespace-nowrap min-w-[90px]">အမျိုးအစား</th>
-                      <th className="p-2.5 text-right whitespace-nowrap min-w-[130px]">လက်ငင်း/လွှဲငွေ (Ks)</th>
-                      <th className="p-2.5 text-right whitespace-nowrap min-w-[120px] bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300">💵 ငွေသားကော်မရှင်</th>
-                      <th className="p-2.5 text-right whitespace-nowrap min-w-[120px] bg-purple-50/70 dark:bg-purple-950/40 text-purple-900 dark:text-purple-300">📱 Walletကော်မရှင်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[110px]">ဖုန်းနံပါတ်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[130px]">Wallet အကောက်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[120px]">ငွေသားအကောက်</th>
-                      <th className="p-2.5 whitespace-nowrap min-w-[105px]">OCR/Ref</th>
-                      <th className="p-2.5 text-center whitespace-nowrap min-w-[80px]">ပြေစာ</th>
+                    <tr className="min-h-[52px]">
+                      <th className="px-2.5 py-3 whitespace-nowrap min-w-[44px]">
+                        <div className="flex flex-col">
+                          <span>စဉ်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(No.)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-3 min-w-[110px]">
+                        <div className="flex flex-col break-words leading-snug">
+                          <span>နေ့စွဲ/အချိန်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Date/Time)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-3 min-w-[125px]">
+                        <div className="flex flex-col break-words leading-snug">
+                          <span>ဖောက်သည် အမည်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Customer)</span>
+                        </div>
+                      </th>
+                      <th className="px-2 py-3 text-center whitespace-nowrap min-w-[85px]">
+                        <div className="flex flex-col items-center leading-snug">
+                          <span>အမျိုးအစား</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Type)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-3 text-right whitespace-nowrap w-px font-mono">
+                        <div className="flex flex-col items-end leading-snug">
+                          <span>လက်ငင်း/လွှဲငွေ</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Actual Paid)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-3 text-right whitespace-nowrap w-px font-mono bg-amber-50/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300">
+                        <div className="flex flex-col items-end leading-snug">
+                          <span>ငွေသားကော်မရှင်</span>
+                          <span className="text-[10px] font-normal text-amber-700 dark:text-amber-300">(Cash Comm)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-3 text-right whitespace-nowrap w-px font-mono bg-purple-50/70 dark:bg-purple-950/40 text-purple-900 dark:text-purple-300">
+                        <div className="flex flex-col items-end leading-snug">
+                          <span>Walletကော်မရှင်</span>
+                          <span className="text-[10px] font-normal text-purple-700 dark:text-purple-300">(Wallet Comm)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-3 min-w-[105px]">
+                        <div className="flex flex-col break-words leading-snug">
+                          <span>ဖုန်းနံပါတ်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Phone)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-3 min-w-[120px]">
+                        <div className="flex flex-col break-words leading-snug">
+                          <span>Wallet အကောက်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Wallet)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-3 min-w-[120px]">
+                        <div className="flex flex-col break-words leading-snug">
+                          <span>ငွေသားအကောက်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Cash Box)</span>
+                        </div>
+                      </th>
+                      <th className="px-2.5 py-3 min-w-[110px]">
+                        <div className="flex flex-col break-words leading-snug">
+                          <span>OCR/ပြေစာအမှတ်</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Voucher Ref)</span>
+                        </div>
+                      </th>
+                      <th className="px-2 py-3 text-center whitespace-nowrap min-w-[70px]">
+                        <div className="flex flex-col items-center leading-snug">
+                          <span>ပြေစာ</span>
+                          <span className="text-[10px] font-normal text-slate-500">(Receipt)</span>
+                        </div>
+                      </th>
                     </tr>
                   </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
