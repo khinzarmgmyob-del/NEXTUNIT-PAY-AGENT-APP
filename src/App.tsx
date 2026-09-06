@@ -1089,17 +1089,7 @@ export default function App() {
               )}
             </button>
 
-            {/* 2. Cloud Auto-Backup & Sync Button */}
-            <button
-              onClick={() => setShowCloudBackupModal(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-sky-200 dark:border-sky-800"
-              title="Cloud Auto-Backup နှင့် ဒေတာသိမ်းဆည်းမှု စီမံရန်"
-            >
-              <Download className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 rotate-180" />
-              <span>Cloud Backup</span>
-            </button>
-
-            {/* 3. Bluetooth Thermal Printer Button */}
+            {/* 2. Bluetooth Thermal Printer Button */}
             <button
               onClick={() => setShowBluetoothModal(true)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
@@ -1111,28 +1101,6 @@ export default function App() {
             >
               <Printer className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
               <span>{btStatus.isConnected ? 'BT Printer ချိတ်ပြီး' : 'BT Printer'}</span>
-            </button>
-
-            {/* 4. Wi-Fi Master / Client Network Mode Button */}
-            <button
-              onClick={() => setShowNetworkModal(true)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                networkConfig.mode === 'server'
-                  ? 'bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
-                  : networkStatus.isConnected
-                  ? 'bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800'
-                  : 'bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
-              }`}
-              title="Wi-Fi Master / Client ကွန်ရက် ဆက်တင်များ"
-            >
-              <Wifi className="w-3.5 h-3.5" />
-              <span>
-                {networkConfig.mode === 'server'
-                  ? '🟢 Master Server'
-                  : networkStatus.isConnected
-                  ? '🔵 Client Mode'
-                  : '🔴 Server Disconnected'}
-              </span>
             </button>
 
             <button
