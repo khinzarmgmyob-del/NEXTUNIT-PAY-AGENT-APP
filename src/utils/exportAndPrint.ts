@@ -321,9 +321,9 @@ function chunkReportRows(
 }
 
 /**
- * Builds standard clean HTML markup for A4 Report sheets with Auto-Fit & Multi-Page Pagination
+ * Builds array of individual page sheets HTML markup
  */
-export function buildReportHtmlMarkup({
+export function buildReportHtmlPages({
   title,
   subtitle,
   shopProfile,
@@ -333,7 +333,7 @@ export function buildReportHtmlMarkup({
   summaryRow,
   columnAligns = [],
   orientation,
-}: PrintReportOptions): string {
+}: PrintReportOptions): string[] {
   const isLandscape = orientation === 'landscape' || (!orientation && tableHeaders.length >= 7);
   const shopName = shopProfile?.shopName || 'Money Agent POS';
   const shopAddress = shopProfile?.address || '';
@@ -451,80 +451,45 @@ export function buildReportHtmlMarkup({
   `;
 
   // Render paginated sheets (report-page)
-  const pagesHtml = chunks
-    .map((chunk) => {
-      const pageNum = chunk.pageIndex + 1;
-      const mmPageNum = toMyanmarDigits(pageNum);
-      const mmTotal = toMyanmarDigits(totalChunks);
+  return chunks.map((chunk) => {
+    const pageNum = chunk.pageIndex + 1;
+    const mmPageNum = toMyanmarDigits(pageNum);
+    const mmTotal = toMyanmarDigits(totalChunks);
 
-      if (chunk.isFirstPage) {
-        return `
-        <div class="report-page" data-page="${pageNum}" style="width: ${pageWidthPx}px; min-height: ${pageMinHeightPx}px; box-sizing: border-box; padding: 14px 18px; background: #ffffff; color: #0f172a; display: flex; flex-direction: column; justify-content: space-between; page-break-after: ${
-          totalChunks > 1 ? 'always' : 'auto'
-        }; break-after: ${
-          totalChunks > 1 ? 'page' : 'auto'
-        }; margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); font-family: 'Plus Jakarta Sans', 'Noto Sans Myanmar', 'Padauk', 'Pyidaungsu', sans-serif;">
-          <div>
-            <!-- Shop Header -->
-            <div style="text-align: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid #0f172a;">
-              <div style="font-size: 16px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase;">${shopName}</div>
-              ${
-                shopAddress || shopPhone
-                  ? `<div style="font-size: 10px; color: #475569; margin-top: 1px;">${[shopAddress, shopPhone]
-                      .filter(Boolean)
-                      .join(' • ')}</div>`
-                  : ''
-              }
-              <div style="font-size: 13px; font-weight: bold; color: #1e293b; margin-top: 4px;">${title}</div>
-              <div style="font-size: 9.5px; color: #64748b; margin-top: 2px;">${subtitle || ''} | ထုတ်ယူချိန် (Printed): ${datePrinted}</div>
-            </div>
-
-            <!-- Summary Cards -->
-            ${renderCardsHtml()}
-
-            <!-- Table -->
-            <table style="width: 100%; border-collapse: collapse; margin-top: 4px;">
-              ${renderTableHeader()}
-              <tbody>
-                ${
-                  chunk.rows.length === 0
-                    ? `<tr><td colspan="${tableHeaders.length}" style="text-align:center; padding: 20px; color:#888; border: 1px solid #cbd5e1;">ဒေတာ မရှိပါ (No Data)</td></tr>`
-                    : chunk.rows.map((row, rIdx) => renderTableRow(row, rIdx)).join('')
-                }
-                ${chunk.isLastPage && chunk.summaryRow ? renderSummaryRow(chunk.summaryRow) : ''}
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Page Footer -->
-          <div style="margin-top: 10px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; font-size: 8.5px; color: #64748b;">
-            <div>စာရင်းပေါင်း (Total): ${tableRows.length} ခု • မှတ်တမ်းအမှတ် (Records): ${chunk.startRowIndex}-${chunk.endRowIndex}</div>
-            <div style="font-weight: bold; color: #0f172a;">စာမျက်နှာ ${mmPageNum} / ${mmTotal} • Page ${pageNum} of ${totalChunks}</div>
-            <div>ထုတ်ယူသည့်စနစ်: Money Agent POS</div>
-          </div>
-        </div>
-      `;
-      }
-
-      // Subsequent Pages
+    if (chunk.isFirstPage) {
       return `
       <div class="report-page" data-page="${pageNum}" style="width: ${pageWidthPx}px; min-height: ${pageMinHeightPx}px; box-sizing: border-box; padding: 14px 18px; background: #ffffff; color: #0f172a; display: flex; flex-direction: column; justify-content: space-between; page-break-after: ${
-        chunk.isLastPage ? 'auto' : 'always'
+        totalChunks > 1 ? 'always' : 'auto'
       }; break-after: ${
-        chunk.isLastPage ? 'auto' : 'page'
+        totalChunks > 1 ? 'page' : 'auto'
       }; margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); font-family: 'Plus Jakarta Sans', 'Noto Sans Myanmar', 'Padauk', 'Pyidaungsu', sans-serif;">
         <div>
-          <!-- Compact Top Banner -->
-          <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 4px; border-bottom: 2px solid #0f172a; margin-bottom: 6px;">
-            <div style="font-size: 11.5px; font-weight: 900; color: #0f172a; text-transform: uppercase;">${shopName} • ${title}</div>
-            <div style="font-size: 9px; color: #64748b;">${subtitle || ''} | စာမျက်နှာ ${mmPageNum} / ${mmTotal} (Page ${pageNum}/${totalChunks})</div>
+          <!-- Shop Header -->
+          <div style="text-align: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid #0f172a;">
+            <div style="font-size: 16px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase;">${shopName}</div>
+            ${
+              shopAddress || shopPhone
+                ? `<div style="font-size: 10px; color: #475569; margin-top: 1px;">${[shopAddress, shopPhone]
+                    .filter(Boolean)
+                    .join(' • ')}</div>`
+                : ''
+            }
+            <div style="font-size: 13px; font-weight: bold; color: #1e293b; margin-top: 4px;">${title}</div>
+            <div style="font-size: 9.5px; color: #64748b; margin-top: 2px;">${subtitle || ''} | ထုတ်ယူချိန် (Printed): ${datePrinted}</div>
           </div>
 
-          <!-- Table with repeated Header -->
+          <!-- Summary Cards -->
+          ${renderCardsHtml()}
+
+          <!-- Table -->
           <table style="width: 100%; border-collapse: collapse; margin-top: 4px;">
             ${renderTableHeader()}
             <tbody>
-              ${chunk.rows.map((row, rIdx) => renderTableRow(row, rIdx)).join('')}
+              ${
+                chunk.rows.length === 0
+                  ? `<tr><td colspan="${tableHeaders.length}" style="text-align:center; padding: 20px; color:#888; border: 1px solid #cbd5e1;">ဒေတာ မရှိပါ (No Data)</td></tr>`
+                  : chunk.rows.map((row, rIdx) => renderTableRow(row, rIdx)).join('')
+              }
               ${chunk.isLastPage && chunk.summaryRow ? renderSummaryRow(chunk.summaryRow) : ''}
             </tbody>
           </table>
@@ -532,15 +497,54 @@ export function buildReportHtmlMarkup({
 
         <!-- Page Footer -->
         <div style="margin-top: 10px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; font-size: 8.5px; color: #64748b;">
-          <div>မှတ်တမ်းအမှတ် (Records): ${chunk.startRowIndex}-${chunk.endRowIndex} / ${tableRows.length}</div>
+          <div>စာရင်းပေါင်း (Total): ${tableRows.length} ခု • မှတ်တမ်းအမှတ် (Records): ${chunk.startRowIndex}-${chunk.endRowIndex}</div>
           <div style="font-weight: bold; color: #0f172a;">စာမျက်နှာ ${mmPageNum} / ${mmTotal} • Page ${pageNum} of ${totalChunks}</div>
           <div>ထုတ်ယူသည့်စနစ်: Money Agent POS</div>
         </div>
       </div>
     `;
-    })
-    .join('');
+    }
 
+    // Subsequent Pages
+    return `
+    <div class="report-page" data-page="${pageNum}" style="width: ${pageWidthPx}px; min-height: ${pageMinHeightPx}px; box-sizing: border-box; padding: 14px 18px; background: #ffffff; color: #0f172a; display: flex; flex-direction: column; justify-content: space-between; page-break-after: ${
+      chunk.isLastPage ? 'auto' : 'always'
+    }; break-after: ${
+      chunk.isLastPage ? 'auto' : 'page'
+    }; margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); font-family: 'Plus Jakarta Sans', 'Noto Sans Myanmar', 'Padauk', 'Pyidaungsu', sans-serif;">
+      <div>
+        <!-- Compact Top Banner -->
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 4px; border-bottom: 2px solid #0f172a; margin-bottom: 6px;">
+          <div style="font-size: 11.5px; font-weight: 900; color: #0f172a; text-transform: uppercase;">${shopName} • ${title}</div>
+          <div style="font-size: 9px; color: #64748b;">${subtitle || ''} | စာမျက်နှာ ${mmPageNum} / ${mmTotal} (Page ${pageNum}/${totalChunks})</div>
+        </div>
+
+        <!-- Table with repeated Header -->
+        <table style="width: 100%; border-collapse: collapse; margin-top: 4px;">
+          ${renderTableHeader()}
+          <tbody>
+            ${chunk.rows.map((row, rIdx) => renderTableRow(row, rIdx)).join('')}
+            ${chunk.isLastPage && chunk.summaryRow ? renderSummaryRow(chunk.summaryRow) : ''}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Page Footer -->
+      <div style="margin-top: 10px; padding-top: 6px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; font-size: 8.5px; color: #64748b;">
+        <div>မှတ်တမ်းအမှတ် (Records): ${chunk.startRowIndex}-${chunk.endRowIndex} / ${tableRows.length}</div>
+        <div style="font-weight: bold; color: #0f172a;">စာမျက်နှာ ${mmPageNum} / ${mmTotal} • Page ${pageNum} of ${totalChunks}</div>
+        <div>ထုတ်ယူသည့်စနစ်: Money Agent POS</div>
+      </div>
+    </div>
+  `;
+  });
+}
+
+/**
+ * Builds standard clean HTML markup for A4 Report sheets with Auto-Fit & Multi-Page Pagination
+ */
+export function buildReportHtmlMarkup(options: PrintReportOptions): string {
+  const pagesHtml = buildReportHtmlPages(options).join('');
   return `
     <div class="report-wrapper" style="font-family: 'Plus Jakarta Sans', 'Noto Sans Myanmar', 'Padauk', 'Pyidaungsu', Arial, sans-serif; color: #0f172a; background: transparent; width: 100%; display: flex; flex-direction: column; align-items: center;">
       ${pagesHtml}

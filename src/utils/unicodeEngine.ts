@@ -49,9 +49,9 @@ export function normalizeMyanmarUnicode(text: string | number | null | undefined
   }
 
   // Canonical ordering for Myanmar Unicode:
-  // Consonant + (Medials: 103B, 103C, 103D, 103E) + (Vowel E: 1031) + (Vowels: 102D, 102E, 1032) + (Tone: 1036, 1037, 1038)
+  // Ensure vowel \u1031 (thawayhtoe) follows the consonant (canonical Unicode 5.1+ order)
   str = str
-    .replace(/([က-အ])(\u1031)/g, '$2$1') // Normalize display if needed
+    .replace(/(\u1031)([က-အ])/g, '$2$1')
     .replace(/\u200B/g, '') // Remove unnecessary zero-width spaces that break table layout
     .trim();
 

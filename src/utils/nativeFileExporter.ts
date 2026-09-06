@@ -7,6 +7,7 @@ import html2canvas from 'html2canvas';
 import {
   PrintReportOptions,
   buildReportHtmlMarkup,
+  buildReportHtmlPages,
   downloadBlob,
   exportReportToPdfAndShare,
   generateFullReportHtmlDocument,
@@ -221,111 +222,10 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 /**
- * Direct Vector PDF generator fallback using jsPDF (no canvas / no timeout)
- */
-function createFallbackVectorPdf(options: PrintReportOptions): jsPDF {
-  const isLandscape =
-    options.orientation === 'landscape' ||
-    (!options.orientation && options.tableHeaders.length >= 7);
-  const doc = new jsPDF({
-    orientation: isLandscape ? 'landscape' : 'portrait',
-    unit: 'mm',
-    format: 'a4',
-  });
-
-  const pageWidth = isLandscape ? 297 : 210;
-  const pageHeight = isLandscape ? 210 : 297;
-  const margin = 12;
-  const usableWidth = pageWidth - margin * 2;
-  const totalCols = Math.min(options.tableHeaders.length, 17);
-  const colWidth = usableWidth / totalCols;
-
-  const shopName = options.shopProfile?.shopName || 'Money Agent POS';
-  let currentPage = 1;
-  const rowsPerPage = isLandscape ? 18 : 28;
-  const totalPages = Math.max(1, Math.ceil(options.tableRows.length / rowsPerPage));
-
-  const drawHeader = (startY: number) => {
-    doc.setFontSize(12);
-    doc.text(shopName, margin, startY);
-    doc.setFontSize(10);
-    doc.text(options.title || 'Report', margin, startY + 5);
-    if (options.subtitle) {
-      doc.setFontSize(7.5);
-      doc.text(options.subtitle, margin, startY + 10);
-    }
-    return startY + 14;
-  };
-
-  const drawTableHead = (y: number) => {
-    doc.setFontSize(6.5);
-    options.tableHeaders.slice(0, totalCols).forEach((h, idx) => {
-      doc.text(String(h).substring(0, 14), margin + idx * colWidth, y);
-    });
-    doc.line(margin, y + 2, pageWidth - margin, y + 2);
-    return y + 6;
-  };
-
-  const drawFooter = (pNum: number) => {
-    doc.setFontSize(7);
-    doc.text(`Page ${pNum} of ${totalPages}`, margin, pageHeight - 6);
-    doc.text(`Money Agent POS`, pageWidth - margin - 25, pageHeight - 6);
-  };
-
-  let currentY = drawHeader(12);
-  if (options.summaryCards && options.summaryCards.length > 0) {
-    doc.setFontSize(7.5);
-    const cardTexts = options.summaryCards.map((c) => `${c.label}: ${c.value}`).join('  |  ');
-    doc.text(cardTexts, margin, currentY);
-    currentY += 7;
-  }
-
-  currentY = drawTableHead(currentY);
-
-  options.tableRows.forEach((row) => {
-    if (currentY > pageHeight - 16) {
-      drawFooter(currentPage);
-      doc.addPage('a4', isLandscape ? 'landscape' : 'portrait');
-      currentPage++;
-      currentY = 12;
-      doc.setFontSize(9);
-      doc.text(`${shopName} • ${options.title}`, margin, currentY);
-      currentY += 5;
-      currentY = drawTableHead(currentY);
-    }
-
-    doc.setFontSize(6);
-    row.slice(0, totalCols).forEach((cell, idx) => {
-      const val = cell !== undefined && cell !== null ? String(cell) : '';
-      doc.text(val.substring(0, 14), margin + idx * colWidth, currentY);
-    });
-    currentY += 4.5;
-  });
-
-  if (options.summaryRow && options.summaryRow.length > 0) {
-    if (currentY > pageHeight - 18) {
-      drawFooter(currentPage);
-      doc.addPage('a4', isLandscape ? 'landscape' : 'portrait');
-      currentPage++;
-      currentY = 14;
-    }
-    doc.line(margin, currentY, pageWidth - margin, currentY);
-    currentY += 4;
-    doc.setFontSize(6.5);
-    options.summaryRow.slice(0, totalCols).forEach((cell, idx) => {
-      const val = cell !== undefined && cell !== null ? String(cell) : '';
-      doc.text(val.substring(0, 14), margin + idx * colWidth, currentY);
-    });
-  }
-
-  drawFooter(currentPage);
-  return doc;
-}
-
-/**
  * Native + Web PDF Exporter
  * - Auto-Fit to A4 Landscape for multi-column tables (>6 cols)
  * - Automatic Multi-Page pagination (Page 1, 2, 3...)
+ * - High-DPI canvas capture using browser's native text shaper for Burmese & English
  * - On Mobile Native: Generates real PDF binary, writes to Documents, launches FileOpener with "Open with" chooser
  * - On Web Browser: Directly downloads or triggers Web Share
  */
@@ -347,96 +247,100 @@ export async function exportToPdfNative(
 
   let pdfDoc: jsPDF;
 
-  // Render hidden offscreen container with full opacity for canvas rendering
-  const reportHtml = buildReportHtmlMarkup({
+  // Retrieve individual page markup array
+  const pages = buildReportHtmlPages({
     ...options,
     orientation: isLandscape ? 'landscape' : 'portrait',
   });
 
+  // Offscreen container positioned at (0,0) behind UI to ensure positive coordinates for html2canvas
   const container = document.createElement('div');
+  container.id = 'pdf-render-stage';
   container.style.position = 'fixed';
   container.style.top = '0';
-  container.style.left = '-10000px';
+  container.style.left = '0';
   container.style.width = `${containerWidthPx}px`;
-  container.style.zIndex = '99999';
+  container.style.zIndex = '-9999';
+  container.style.visibility = 'visible';
   container.style.opacity = '1';
   container.style.pointerEvents = 'none';
   container.style.background = '#ffffff';
   container.style.color = '#000000';
   container.style.fontFamily =
     "'Noto Sans Myanmar', 'Padauk', 'Pyidaungsu', 'Plus Jakarta Sans', Arial, sans-serif";
-  container.innerHTML = reportHtml;
+  container.style.margin = '0';
+  container.style.padding = '0';
   document.body.appendChild(container);
 
   try {
-    const pageElements = container.querySelectorAll<HTMLElement>('.report-page');
+    if (document.fonts && document.fonts.ready) {
+      try {
+        await document.fonts.ready;
+      } catch (_) {}
+    }
+
     const pdf = new jsPDF({
       orientation: isLandscape ? 'landscape' : 'portrait',
       unit: 'mm',
       format: 'a4',
+      compress: true,
     });
 
-    if (pageElements.length > 0) {
-      for (let i = 0; i < pageElements.length; i++) {
-        const pageEl = pageElements[i];
-        // Temporarily reset borders/shadows/margins for clean page capture
-        const prevBoxShadow = pageEl.style.boxShadow;
-        const prevBorder = pageEl.style.border;
-        const prevMargin = pageEl.style.marginBottom;
-        pageEl.style.boxShadow = 'none';
-        pageEl.style.border = 'none';
-        pageEl.style.marginBottom = '0';
+    for (let i = 0; i < pages.length; i++) {
+      container.innerHTML = pages[i];
+      // Allow browser to render layout and fonts
+      await new Promise((resolve) => setTimeout(resolve, 80));
 
-        const canvasPromise = html2canvas(pageEl, {
-          scale: 1.25,
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          windowWidth: containerWidthPx,
-        });
+      const pageEl = container.firstElementChild as HTMLElement;
+      if (!pageEl) continue;
 
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('PDF Canvas render timed out')), 15000)
-        );
+      pageEl.style.boxShadow = 'none';
+      pageEl.style.border = 'none';
+      pageEl.style.margin = '0';
+      const actualHeight = pageEl.offsetHeight || (isLandscape ? 770 : 1080);
 
-        const canvas = await Promise.race([canvasPromise, timeoutPromise]);
-
-        pageEl.style.boxShadow = prevBoxShadow;
-        pageEl.style.border = prevBorder;
-        pageEl.style.marginBottom = prevMargin;
-
-        const imgData = canvas.toDataURL('image/jpeg', 0.90);
-        if (i > 0) {
-          pdf.addPage('a4', isLandscape ? 'landscape' : 'portrait');
-        }
-        pdf.addImage(imgData, 'JPEG', 0, 0, paperWidthMm, paperHeightMm);
-      }
-    } else {
-      // Fallback single capture
-      const canvasPromise = html2canvas(container, {
-        scale: 1.2,
-        useCORS: true,
+      const canvasPromise = html2canvas(pageEl, {
+        scale: 2, // 2x scale for sharp text rendering
+        useCORS: false,
+        allowTaint: true,
         logging: false,
         backgroundColor: '#ffffff',
         windowWidth: containerWidthPx,
+        scrollX: 0,
+        scrollY: 0,
+        x: 0,
+        y: 0,
+        width: containerWidthPx,
+        height: actualHeight,
       });
 
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('PDF Canvas render timed out')), 15000)
+        setTimeout(() => reject(new Error('Canvas render timed out')), 12000)
       );
 
       const canvas = await Promise.race([canvasPromise, timeoutPromise]);
-      const imgData = canvas.toDataURL('image/jpeg', 0.90);
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+      if (i > 0) {
+        pdf.addPage('a4', isLandscape ? 'landscape' : 'portrait');
+      }
       pdf.addImage(imgData, 'JPEG', 0, 0, paperWidthMm, paperHeightMm);
     }
 
     pdfDoc = pdf;
   } catch (canvasErr) {
-    console.warn('Canvas rendering fallback to vector PDF:', canvasErr);
-    pdfDoc = createFallbackVectorPdf({
+    console.warn('Canvas PDF export error, triggering native print preview engine:', canvasErr);
+    // Never fallback to raw doc.text() which cannot shape Burmese characters.
+    // Fallback to Native Print Preview which guarantees 100% native vector font rendering!
+    const fullHtml = generateFullReportHtmlDocument({
       ...options,
       orientation: isLandscape ? 'landscape' : 'portrait',
     });
+    executeNativePrintOrPreview(fullHtml, options.title);
+    return {
+      success: true,
+      platform: 'web',
+    };
   } finally {
     if (document.body.contains(container)) {
       document.body.removeChild(container);
